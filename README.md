@@ -27,10 +27,12 @@ Selected-ship actions appear when right-clicking a player ship, or when
 right-clicking free sector space while player ships are selected. Whole-empire
 actions are shown on the player HQ by default.
 
-The mod-wide Extension Options menu has one visibility option:
+The mod-wide Extension Options menu has a few mod-level options:
 
 - **Show whole-empire actions only on HQ.** Enabled by default. Disable it to
   show whole-empire actions on every player-owned station.
+- **Debug logging.** Optional; useful for troubleshooting reshuffle decisions.
+  Reason logging can be grouped, per-decision, or disabled.
 
 ## Promote Vs Reshuffle
 
@@ -117,9 +119,10 @@ managers, ship traders, or other special-post NPCs out of the way.
   targets before touching sensitive C API calls.
 - **Busy pilots are skipped.** If the engine reports `previouspilotbusy`, the
   target ship is skipped for that run.
-- **Debug logging is off by default.** To turn it on, edit
-  [md/bulk_crew_promotion.xml](md/bulk_crew_promotion.xml) and change
-  `$debugchance` in the `Root` cue from `0` to `100`.
+- **Debug logging is off by default.** Enable it from Extension Options if you
+  need troubleshooting output. The default grouped mode summarizes donor skips,
+  target skips, candidate skips, delayed retries, and assignments without
+  flooding the log.
 
 ## Credits
 
