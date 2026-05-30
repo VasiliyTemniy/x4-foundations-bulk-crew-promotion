@@ -129,3 +129,7 @@ managers, ship traders, or other special-post NPCs out of the way.
   `AssignHiredActor` instead of the dock-bound `PerformCrewExchange2` path.
 - Built on **SirNukes Mod Support APIs**.
 - By VasiliyTemniy.
+
+## Source
+
+https://github.com/VasiliyTemniy/x4-foundations-bulk-crew-promotion
