@@ -7,7 +7,7 @@
     <t id="2">Promote best crew on all ships in the empire</t> <!--(all my ships)-->
     <t id="3">Reshuffle captains, empire pool</t> <!--(selected ships)-->
     <t id="4">Reshuffle captains on all ships in the empire</t> <!--(all my ships)-->
-    <t id="5">Reshuffle captains with config, empire pool</t> <!--(selected ships)-->
+    <t id="5">Reshuffle captains with config</t> <!--(selected ships)-->
 
     <!-- Notifications -->
     <t id="10">Bulk Crew Promotion: promoted %1 pilot(s) on selected ships.</t>
