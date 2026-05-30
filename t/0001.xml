@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<language>
+  <page id="202600530" title="Bulk Crew Promotion" voice="no">
+    <!-- "User-facing strings for VAS Bulk Crew Promotion" -->
+    <!-- Right-click menu actions -->
+    <t id="1">Promote best crew</t> <!--(selected ships)-->
+    <t id="2">Promote best crew on all ships in the empire</t> <!--(all my ships)-->
+    <t id="3">Reshuffle captains, empire pool</t> <!--(selected ships)-->
+    <t id="4">Reshuffle captains on all ships in the empire</t> <!--(all my ships)-->
+    <t id="5">Reshuffle captains with config, empire pool</t> <!--(selected ships)-->
+
+    <!-- Notifications -->
+    <t id="10">Bulk Crew Promotion: promoted %1 pilot(s) on selected ships.</t>
+    <t id="11">Bulk Crew Promotion: promoted %1 pilot(s) across all your ships.</t>
+    <t id="12">Bulk Crew Promotion: reshuffled %1 captain(s) from empire pool.</t>
+    <t id="13">Bulk Crew Promotion: no improvements possible.</t>
+
+    <!-- Configuration menu -->
+    <!-- Menu and window titles -->
+    <t id="20">Bulk Crew Promotion</t>
+    <t id="21">Configure Reshuffle</t>
+    <t id="22">Default Reshuffle Options</t>
+
+    <!-- Options menu items -->
+    <t id="30">Show whole-empire actions only on HQ</t>
+    <t id="31">Edit default reshuffle options</t>
+    <t id="32">Enable debug logging</t>
+    <t id="33">Debug reason logging</t>
+    <t id="34">Grouped</t>
+    <t id="35">Each decision</t>
+    <t id="36">None</t>
+
+    <!-- Config section headers -->
+    <t id="40">Target ships</t>
+    <t id="41">Donor ships</t>
+    <t id="42">Candidate roles</t>
+    <t id="43">Donor protection</t>
+    <t id="44">Recipient safety</t>
+    <t id="45">Improvement thresholds</t>
+    <t id="46">Fleet filters</t>
+    <t id="47">Additional target filters</t>
+    <t id="48">Marine protection</t>
+    <t id="49">Ship size filters</t>
+
+    <!-- Ship type filters -->
+    <t id="50">Include military ships</t>
+    <t id="52">Include miners</t>
+    <t id="53">Include traders</t>
+    <t id="54">Include builders</t>
+    <t id="55">Include salvage ships</t>
+    <t id="56">Include auxiliaries / resuppliers</t>
+    <t id="57">Include other ship purposes</t>
+
+    <!-- Candidate role checkboxes -->
+    <t id="60">Use service crew as candidates</t>
+    <t id="61">Use marines as candidates</t>
+    <t id="62">Use unassigned personnel as candidates</t>
+
+    <!-- Donor protection sliders -->
+    <t id="70">Keep civilian donor service crew above</t>
+    <t id="71">Keep civilian donor marines above</t>
+    <t id="72">Keep military donor service crew above</t>
+    <t id="73">Keep military donor marines above</t>
+
+    <!-- Recipient safety sliders -->
+    <t id="80">Recipient minimum hull</t>
+    <t id="81">Recipient minimum shield</t>
+
+    <!-- Improvement threshold sliders -->
+    <t id="90">Minimum piloting improvement</t>
+    <t id="91">Minimum combined pilot-score improvement</t>
+
+    <!-- Fleet filter checkboxes -->
+    <t id="100">Only reshuffle within the same commander</t>
+    <t id="101">Only target ships without a commander</t>
+
+    <!-- Additional target filter checkboxes -->
+    <t id="110">Only target ships without a captain</t>
+
+    <!-- Marine protection -->
+    <t id="120">Preserve elite marines</t>
+    <t id="121">Elite marine boarding threshold</t>
+
+    <!-- Buttons -->
+    <t id="130">Run reshuffle</t>
+    <t id="131">Save as default</t>
+    <t id="132">Reset defaults</t>
+    <t id="133">Close</t>
+
+    <!-- Ship size filters -->
+    <t id="140">Include S-class ships</t>
+    <t id="141">Include M-class ships</t>
+    <t id="142">Include L-class ships</t>
+    <t id="143">Include XL-class ships</t>
+  </page>
+</language>
