@@ -10,10 +10,15 @@
     <t id="5">Reshuffle captains with config</t> <!--(selected ships)-->
 
     <!-- Notifications -->
-    <t id="10">Bulk Crew Promotion: promoted %1 pilot(s) on selected ships.</t>
-    <t id="11">Bulk Crew Promotion: promoted %1 pilot(s) across all your ships.</t>
-    <t id="12">Bulk Crew Promotion: reshuffled %1 captain(s) from empire pool.</t>
+    <t id="10">Bulk Crew Promotion: promoted %1 pilots on selected ships.</t>
+    <t id="11">Bulk Crew Promotion: promoted %1 pilots across all your ships.</t>
+    <t id="12">Bulk Crew Promotion: reshuffled %1 captains from empire pool.</t>
     <t id="13">Bulk Crew Promotion: no improvements possible.</t>
+    <t id="14">Bulk Crew Promotion</t>
+    <t id="15">Bulk Crew Promotion: reshuffle started - %1 target ships, %2 candidates, %3 donor ships skipped, %4 crew members skipped by config.</t>
+    <t id="16">Bulk Crew Promotion: reshuffle progress - %1/%2 ships checked, %3 captains improved, %4 delayed assignments pending.</t>
+    <t id="17">Bulk Crew Promotion: ship pass complete - %1 captains improved, %2 delayed assignments still pending.</t>
+    <t id="18">Bulk Crew Promotion: reshuffle complete - %1 captains improved, %2 ships had no better candidate, %3 capacity/incompatibility skips.</t>
 
     <!-- Configuration menu -->
     <!-- Menu and window titles -->
