@@ -1,0 +1,110 @@
+[size=6][b]Bulk Crew Promotion[/b][/size]
+
+Bulk Crew Promotion adds map right-click actions for promoting and reshuffling pilots/captains across many player ships at once.
+
+The vanilla map already has a useful one-ship action: replace the current pilot with the best available crewmember on that ship. This mod keeps that spirit, but adds bulk tools for large empires where doing it ship by ship becomes menu work.
+
+[size=4][b]Requirements[/b][/size]
+
+[list]
+[*][b]SirNukes Mod Support APIs[/b] ([url=https://www.nexusmods.com/x4foundations/mods/503]link[/url]). This is a hard dependency; it provides the Lua loader, interact-menu API, and simple menu/options helpers.[/*]
+[/list]
+
+[size=4][b]Actions[/b][/size]
+
+[list]
+[*][b]Promote best crew[/b] — [i]Selected ships.[/i] Promotes the best on-board service/marine crewmember on each selected ship.
+[*][b]Promote best crew on all ships[/b] — [i]Whole empire.[/i] Same local promotion pass, but for every player ship.
+[*][b]Reshuffle captains, empire pool[/b] — [i]Selected ships.[/i] Immediate reshuffle using lax defaults. Preserves the original quick behavior.
+[*][b]Reshuffle captains with config, empire pool[/b] — [i]Selected ships.[/i] Opens the reshuffle config window, then runs against selected ships.
+[*][b]Reshuffle captains on all ships[/b] — [i]Whole empire.[/i] Opens the reshuffle config window, then runs against every eligible player ship.
+[/list]
+
+Selected-ship actions appear when right-clicking a player ship, or when right-clicking free sector space while player ships are selected. Whole-empire actions are shown on the player HQ by default.
+
+The mod-wide Extension Options menu has a few mod-level options:
+
+[list]
+[*][b]Show whole-empire actions only on HQ.[/b] Enabled by default. Disable it to show whole-empire actions on every player-owned station.
+[*][b]Debug logging.[/b] Optional; useful for troubleshooting reshuffle decisions. Reason logging can be grouped, per-decision, or disabled.
+[/list]
+
+[size=4][b]Promote Vs Reshuffle[/b][/size]
+
+[list]
+[*][b]Promote[/b] — Candidate pool: each ship's own service + marine crew. Movement: none, same-ship promotion. Best for: quick local cleanup.
+[*][b]Reshuffle[/b] — Candidate pool: player empire service + marine + unassigned crew. Movement: cross-ship assignment through [font=Courier New]AssignHiredActor[/font]. Best for: moving the best pilots to ships that need them.
+[/list]
+
+Promote does not move crew between ships. Reshuffle builds an empire-wide candidate pool and assigns better candidates to target captain slots.
+
+Existing captains, managers, ship traders, and other assigned-post NPCs are not used as reshuffle candidates.
+
+[size=4][b]Configured Reshuffle[/b][/size]
+
+Configured reshuffle opens a run-options window before moving anyone. The same window can also be opened from Extension Options to edit the default values used for future configured runs.
+
+The immediate selected-ships reshuffle does [b]not[/b] read these options. It uses lax Lua defaults so the old one-click behavior stays fast and broad.
+
+Implemented configured options:
+
+[list]
+[*][b]Target ship purpose filters.[/b] Include or exclude military, miners, traders, builders, salvage ships, auxiliaries/resuppliers, and other ship purposes.
+[*][b]Donor ship purpose filters.[/b] The same purpose filters, but for ships that may donate candidate crew.
+[*][b]Target and donor size filters.[/b] Include or exclude S, M, L, and XL ships independently for target and donor sides.
+[*][b]Candidate role filters.[/b] Allow or disallow service crew, marines, and unassigned personnel as candidates.
+[*][b]Donor protection.[/b] Keep a minimum percentage of service crew and marines on civilian donors and military donors, tracked separately.
+[*][b]Recipient safety.[/b] Require target ships to be above configured hull and shield percentages.
+[*][b]Improvement thresholds.[/b] Require a minimum raw piloting improvement and/or minimum combined pilot-assignment score improvement.
+[*][b]Fleet filters.[/b] Optionally restrict candidates to ships under the same commander, or target only ships without a commander.
+[*][b]Additional target filters.[/b] Optionally target only ships without a captain.
+[*][b]Marine protection.[/b] Preserve marines whose boarding skill is at or above a configured threshold.
+[/list]
+
+[size=4][b]Reshuffle Details[/b][/size]
+
+[list=1]
+[*]Target slots come from selected ships or all player ships, depending on the action.
+[*]Ships whose current pilot already has capped piloting skill ([font=Courier New]15/15[/font]) are skipped.
+[*]Ships with no non-pilot crew capacity and an already assigned captain are skipped.
+[*]Candidates are collected from allowed donor ships and allowed roles.
+[*]Candidates are sorted by raw [font=Courier New]piloting[/font] skill first. Combined assignment skill for [font=Courier New]aipilot[/font] is the tie-breaker.
+[*]For each target, the script asks the engine for the candidate's combined skill on that specific pilot post and only applies configured improvements.
+[*]Large reshuffles run over [font=Courier New]onUpdate[/font], one target slot at a time, so the game remains responsive instead of freezing for one long synchronous pass.
+[/list]
+
+[size=4][b]Full Ships[/b][/size]
+
+When the target ship is full, reshuffle tries a small workaround:
+
+[list=1]
+[*]Pick one low-value service/marine crew member on the target ship.
+[*]Move that person to the donor ship, preserving role when possible.
+[*]Wait one second.
+[*]Retry assigning the chosen candidate as the target captain.
+[/list]
+
+If the donor has no room, that donor is skipped for the current target and the script keeps searching. If the target has no movable service/marine crew, the slot is skipped.
+
+This is deliberately conservative. It does not move existing captains, managers, ship traders, or other special-post NPCs out of the way.
+
+[size=4][b]Caveats[/b][/size]
+
+[list]
+[*][b]Reshuffle is not undoable.[/b] It moves crew through the same engine path as normal personnel assignment.
+[*][b]Selected scope includes the right-click target.[/b] Lua deduplicates the right-clicked object and selected ships, then filters invalid sector/free-space targets before touching sensitive C API calls.
+[*][b]Busy pilots are retried.[/b] If the engine reports [font=Courier New]previouspilotbusy[/font], the assignment is queued and retried on a delayed schedule (after 10s, then 60s, then 120s). The target ship is only skipped if the pilot is still busy after the last retry.
+[*][b]Debug logging is off by default.[/b] Enable it from Extension Options if you need troubleshooting output. The default grouped mode summarizes donor skips, target skips, candidate skips, delayed retries, and assignments without flooding the log.
+[/list]
+
+[size=4][b]Credits[/b][/size]
+
+[list]
+[*]Inspired in part by [b]Zoinks Captain Shuffle[/b].
+[*]Built on [b]SirNukes Mod Support APIs[/b].
+[*]By VasiliyTemniy.
+[/list]
+
+[size=4][b]Source[/b][/size]
+
+[url=https://github.com/VasiliyTemniy/x4-foundations-bulk-crew-promotion]https://github.com/VasiliyTemniy/x4-foundations-bulk-crew-promotion[/url]
