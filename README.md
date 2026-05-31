@@ -9,7 +9,7 @@ adds bulk tools for large empires where doing it ship by ship becomes menu work.
 
 ## Requirements
 
-- **SirNukes Mod Support APIs** (Steam Workshop ID `2042901274`).
+- **SirNukes Mod Support APIs** ([link](https://www.nexusmods.com/x4foundations/mods/503)).
   This is a hard dependency; it provides the Lua loader, interact-menu API, and
   simple menu/options helpers.
 
@@ -117,8 +117,10 @@ managers, ship traders, or other special-post NPCs out of the way.
 - **Selected scope includes the right-click target.** Lua deduplicates the
   right-clicked object and selected ships, then filters invalid sector/free-space
   targets before touching sensitive C API calls.
-- **Busy pilots are skipped.** If the engine reports `previouspilotbusy`, the
-  target ship is skipped for that run.
+- **Busy pilots are retried.** If the engine reports
+  `previouspilotbusy`, the assignment is queued and retried on a delayed
+  schedule (after 10s, then 60s, then 120s). The target ship is only skipped if
+  the pilot is still busy after the last retry.
 - **Debug logging is off by default.** Enable it from Extension Options if you
   need troubleshooting output. The default grouped mode summarizes donor skips,
   target skips, candidate skips, delayed retries, and assignments without
@@ -126,10 +128,7 @@ managers, ship traders, or other special-post NPCs out of the way.
 
 ## Credits
 
-- The vanilla crew assignment system does the real work; this mod batches and
-  prioritizes calls into that system.
-- Inspired in part by **Zoinks Captain Shuffle**, though this mod uses
-  `AssignHiredActor` instead of the dock-bound `PerformCrewExchange2` path.
+- Inspired in part by **Zoinks Captain Shuffle**.
 - Built on **SirNukes Mod Support APIs**.
 - By VasiliyTemniy.
 
