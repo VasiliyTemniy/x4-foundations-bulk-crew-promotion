@@ -837,7 +837,55 @@
           </actions>
         </cue>
 
-        <!-- Result listeners. Lua signals via AddUITriggeredEvent with the
+        <!-- Reshuffle lifecycle listeners. Lua sends numeric data in
+             event.param2. MD owns translated player-facing text. -->
+        <cue name="OnReshuffleStarted" instantiate="true">
+          <conditions>
+            <event_ui_triggered screen="'VAS_BCP_ReshuffleStarted'"/>
+          </conditions>
+          <actions>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <show_notification text="{202600530,15}.[$msg.{1}, $msg.{2}, $msg.{3}, $msg.{4}]" timeout="5s"/>
+            <reset_cue cue="this"/>
+          </actions>
+        </cue>
+
+        <cue name="OnReshuffleProgress" instantiate="true">
+          <conditions>
+            <event_ui_triggered screen="'VAS_BCP_ReshuffleProgress'"/>
+          </conditions>
+          <actions>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <show_notification text="{202600530,16}.[$msg.{1}, $msg.{2}, $msg.{3}, $msg.{4}]" timeout="5s"/>
+            <reset_cue cue="this"/>
+          </actions>
+        </cue>
+
+        <cue name="OnReshuffleWaiting" instantiate="true">
+          <conditions>
+            <event_ui_triggered screen="'VAS_BCP_ReshuffleWaiting'"/>
+          </conditions>
+          <actions>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <show_notification text="{202600530,17}.[$msg.{1}, $msg.{2}]" timeout="7s"/>
+            <write_to_logbook category="upkeep" title="{202600530,14}" text="{202600530,17}.[$msg.{1}, $msg.{2}]" interaction="showonmap"/>
+            <reset_cue cue="this"/>
+          </actions>
+        </cue>
+
+        <cue name="OnReshuffleDone" instantiate="true">
+          <conditions>
+            <event_ui_triggered screen="'VAS_BCP_ReshuffleDone'"/>
+          </conditions>
+          <actions>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <show_notification text="{202600530,18}.[$msg.{1}, $msg.{2}, $msg.{3}]" timeout="7s"/>
+            <write_to_logbook category="upkeep" title="{202600530,14}" text="{202600530,18}.[$msg.{1}, $msg.{2}, $msg.{3}]" interaction="showonmap"/>
+            <reset_cue cue="this"/>
+          </actions>
+        </cue>
+
+        <!-- Promote result listeners. Lua signals via AddUITriggeredEvent with the
              promoted count as the value parameter; event.param2 is the count
              as a string. show_notification's %1 substitution accepts strings. -->
 
@@ -866,36 +914,6 @@
             </do_if>
             <do_else>
               <show_notification text="{202600530,11}.[event.param2]" timeout="5s"/>
-            </do_else>
-            <reset_cue cue="this"/>
-          </actions>
-        </cue>
-
-        <cue name="OnReshuffleSelectedResult" instantiate="true">
-          <conditions>
-            <event_ui_triggered screen="'VAS_BCP_ReshuffleSelected'"/>
-          </conditions>
-          <actions>
-            <do_if value="event.param2 == '0'">
-              <show_notification text="{202600530,13}" timeout="5s"/>
-            </do_if>
-            <do_else>
-              <show_notification text="{202600530,12}.[event.param2]" timeout="5s"/>
-            </do_else>
-            <reset_cue cue="this"/>
-          </actions>
-        </cue>
-
-        <cue name="OnReshuffleAllResult" instantiate="true">
-          <conditions>
-            <event_ui_triggered screen="'VAS_BCP_ReshuffleAll'"/>
-          </conditions>
-          <actions>
-            <do_if value="event.param2 == '0'">
-              <show_notification text="{202600530,13}" timeout="5s"/>
-            </do_if>
-            <do_else>
-              <show_notification text="{202600530,12}.[event.param2]" timeout="5s"/>
             </do_else>
             <reset_cue cue="this"/>
           </actions>

@@ -14,8 +14,9 @@
 --                               Full target ships get one low-value service or
 --                               marine moved to the donor and a delayed retry.
 --
--- All public actions end in AddUITriggeredEvent("VAS_BCP_<Mode>", count) so
--- the MD-side listener can fire the player-facing notification.
+-- Promote actions report a simple count to MD via AddUITriggeredEvent.
+-- Reshuffles publish structured progress data on the player blackboard and
+-- signal translated lifecycle notifications from MD.
 --
 -- Debug logging is driven by the MD-side `$debugchance` value
 -- (player.entity.$vas_bcp_debug_chance). Defaults to 0 (silent). Large
@@ -63,6 +64,7 @@ ffi.cdef[[
     } SkillInfo;
 
     UniverseID GetPlayerID(void);
+    double     GetCurrentGameTime(void);
     uint32_t   GetNumAllRoles(void);
     uint32_t   GetNumAllFactionShips(const char* factionid);
     uint32_t   GetAllFactionShips(UniverseID* result, uint32_t resultlen, const char* factionid);
@@ -95,11 +97,12 @@ local logBuffer = {}
 local pendingRetries = {}
 local activeReshuffles = {}
 local updateRegistered = false
-local notify
+local notifyPromote
 local promotionLogLinesSinceFlush = 0
 local verboseLogLinesSinceFlush = 0
 local PROMOTION_LOG_FLUSH_INTERVAL = 60
 local VERBOSE_LOG_FLUSH_INTERVAL = 60
+local RESHUFFLE_PROGRESS_LOG_INTERVAL = 5.0
 local BUSY_PILOT_RETRY_DELAYS = { 10, 60, 120 }
 
 -- Local-only debug verbosity for reshuffle decision spam.
@@ -130,6 +133,11 @@ local function flushDebug()
     logBuffer = {}
     promotionLogLinesSinceFlush = 0
     verboseLogLinesSinceFlush = 0
+end
+
+local function pushReshuffleMessage(kind, data)
+    SetNPCBlackboard(safePlayerID(), "$vas_bcp_reshuffle_message", data or {})
+    AddUITriggeredEvent("VAS_BCP_Reshuffle" .. kind, "changed")
 end
 
 local function notePromotionLogLine()
@@ -184,6 +192,25 @@ local function logStatBucket(title, bucket)
         debug(string.format("    %s: %s", key, tostring(bucket[key])))
         noteVerboseLogLine()
     end
+end
+
+local function logGroupedReshuffleStats(job)
+    if job.groupedStatsLogged then return end
+    logStatBucket("Grouped donor ship skips:", job.donorShipSkipStats)
+    logStatBucket("Grouped target ship skips:", job.targetShipSkipStats)
+    logStatBucket("Grouped candidate skips:", job.candidateSkipStats)
+    logStatBucket("Grouped delayed retry queues:", job.retryStats)
+    logStatBucket("Grouped assignments:", job.assignmentStats)
+    job.groupedStatsLogged = true
+end
+
+local function sumStatBucket(bucket)
+    local total = 0
+    if not bucket then return total end
+    for _, count in pairs(bucket) do
+        total = total + (tonumber(count) or 0)
+    end
+    return total
 end
 
 -- ----------------------------------------------------------------------------
@@ -628,12 +655,64 @@ local function assignToRolePreserving(actor, target, roleid, checkonly)
     return reason, role
 end
 
+local function logReshuffleProgress(job, gameNow, realNow)
+    if gameNow < (job.nextProgressLog or 0) then return end
+
+    local totalSlots = #job.slots
+    local processedSlots = math.max(0, math.min(totalSlots, (tonumber(job.nextSlot) or 1) - 1))
+    local pendingDelay = math.max(0, (tonumber(job.nextTime) or realNow) - realNow)
+    debug(string.format(
+        "Reshuffle progress [%s]: slots %d/%d, promoted=%d, noCandidate=%d, capacitySkips=%d, pendingRetries=%d, nextSlotDelay=%.1fs",
+        tostring(job.mode),
+        processedSlots,
+        totalSlots,
+        tonumber(job.promoted) or 0,
+        tonumber(job.skippedNoCandidate) or 0,
+        tonumber(job.skippedCapacity) or 0,
+        tonumber(job.pendingRetries) or 0,
+        pendingDelay))
+    job.nextProgressLog = gameNow + RESHUFFLE_PROGRESS_LOG_INTERVAL
+    flushDebug()
+
+    local pendingRetryCount = tonumber(job.pendingRetries) or 0
+    local retryTailActive = processedSlots >= totalSlots and pendingRetryCount > 0
+    if processedSlots < totalSlots and not job.retryTailReported then
+        pushReshuffleMessage("Progress", {
+            processedSlots,
+            totalSlots,
+            tonumber(job.promoted) or 0,
+            pendingRetryCount,
+        })
+    end
+
+    if retryTailActive and not job.retryTailReported then
+        logGroupedReshuffleStats(job)
+        debug(string.format("Reshuffle slot pass complete: %d promoted, %d slots without candidate, %d delayed retry/retries still pending",
+            tonumber(job.promoted) or 0,
+            tonumber(job.skippedNoCandidate) or 0,
+            pendingRetryCount))
+        flushDebug()
+        job.retryTailReported = true
+        pushReshuffleMessage("Waiting", {
+            tonumber(job.promoted) or 0,
+            pendingRetryCount,
+        })
+    end
+end
+
 local function onUpdate()
-    local now = getElapsedTime()
+    -- Two independent clocks:
+    --   realNow  = real UI time; drives the per-slot processing cadence so the
+    --              empire walk keeps grinding one slot per tick regardless of pause.
+    --   gameNow  = in-game simulation time; freezes on pause, scales with SETA.
+    --              Drives retry delays and the progress heartbeat so those only
+    --              advance while the game is actually running.
+    local realNow = getElapsedTime()
+    local gameNow = C.GetCurrentGameTime()
     local remaining = {}
 
     for _, retry in ipairs(pendingRetries) do
-        if now < retry.time then
+        if gameNow < retry.time then
             remaining[#remaining + 1] = retry
         else
             local actor = makePersonActor(retry.cand.container, retry.cand.seed)
@@ -646,7 +725,7 @@ local function onUpdate()
             elseif reason == "previouspilotbusy" and retry.busyDelayIndex and retry.busyDelayIndex <= #BUSY_PILOT_RETRY_DELAYS then
                 local delay = BUSY_PILOT_RETRY_DELAYS[retry.busyDelayIndex]
                 retry.busyDelayIndex = retry.busyDelayIndex + 1
-                retry.time = now + delay
+                retry.time = gameNow + delay
                 remaining[#remaining + 1] = retry
                 if logReasonsEach() then
                     debug(string.format("    %s: current pilot still busy; retry again in %ss",
@@ -670,26 +749,27 @@ local function onUpdate()
 
     local remainingReshuffles = {}
     for _, job in ipairs(activeReshuffles) do
-        if now < job.nextTime then
+        logReshuffleProgress(job, gameNow, realNow)
+        if realNow < job.nextTime then
             remainingReshuffles[#remainingReshuffles + 1] = job
         else
             local slot = job.slots[job.nextSlot]
             if slot then
                 job.processSlot(job, slot)
                 job.nextSlot = job.nextSlot + 1
-                job.nextTime = now + RESHUFFLE_SLOT_DELAY
+                job.nextTime = realNow + RESHUFFLE_SLOT_DELAY
                 remainingReshuffles[#remainingReshuffles + 1] = job
             elseif job.pendingRetries > 0 then
                 remainingReshuffles[#remainingReshuffles + 1] = job
             else
-                logStatBucket("Grouped donor ship skips:", job.donorShipSkipStats)
-                logStatBucket("Grouped target ship skips:", job.targetShipSkipStats)
-                logStatBucket("Grouped candidate skips:", job.candidateSkipStats)
-                logStatBucket("Grouped delayed retry queues:", job.retryStats)
-                logStatBucket("Grouped assignments:", job.assignmentStats)
+                logGroupedReshuffleStats(job)
                 debug(string.format("Reshuffle done: %d promoted, %d slots without candidate, %d capacity skips",
                     job.promoted, job.skippedNoCandidate, job.skippedCapacity))
-                notify(job.mode, job.promoted)
+                pushReshuffleMessage("Done", {
+                    job.promoted,
+                    job.skippedNoCandidate,
+                    job.skippedCapacity,
+                })
             end
         end
     end
@@ -706,7 +786,9 @@ local function scheduleRetry(job, slot, cand, totalSkill, delay, busyDelayIndex)
     job.pendingRetries = job.pendingRetries + 1
     pendingRetries[#pendingRetries + 1] = {
         job = job,
-        time = getElapsedTime() + delay,
+        -- Retry delays count down on in-game time (see onUpdate): they pause with
+        -- the game and accelerate under SETA.
+        time = C.GetCurrentGameTime() + delay,
         slot = {
             ship = slot.ship,
             post = slot.post,
@@ -1080,7 +1162,7 @@ end
 local function reshuffleShips(slotShips, mode, config)
     if not slotShips or #slotShips == 0 then
         debug("Reshuffle: no slot ships, nothing to do")
-        notify(mode, 0)
+        pushReshuffleMessage("Done", { 0, 0, 0 })
         return 0
     end
 
@@ -1091,6 +1173,12 @@ local function reshuffleShips(slotShips, mode, config)
     local slots, slotStats = buildCaptainSlots(slotShips, config)
     debug(string.format("Reshuffle: %d slot ship(s), empire pool = %d candidate(s)",
         #slots, #pool))
+    pushReshuffleMessage("Started", {
+        #slots,
+        #pool,
+        sumStatBucket(poolStats and poolStats.donorShipSkipStats),
+        sumStatBucket(poolStats and poolStats.candidateSkipStats),
+    })
 
     activeReshuffles[#activeReshuffles + 1] = {
         mode = mode,
@@ -1104,12 +1192,15 @@ local function reshuffleShips(slotShips, mode, config)
         candidateSkipStats = poolStats and poolStats.candidateSkipStats or {},
         assignmentStats = {},
         retryStats = {},
+        groupedStatsLogged = false,
+        retryTailReported = false,
         promoted = 0,
         skippedNoCandidate = 0,
         skippedCapacity = 0,
         pendingRetries = 0,
         nextSlot = 1,
         nextTime = getElapsedTime(),
+        nextProgressLog = C.GetCurrentGameTime() + RESHUFFLE_PROGRESS_LOG_INTERVAL,
         processSlot = processReshuffleSlot,
     }
     if not updateRegistered then
@@ -1150,7 +1241,7 @@ local function readShipsFromBlackboard()
     return out
 end
 
-notify = function(mode, count)
+notifyPromote = function(mode, count)
     AddUITriggeredEvent("VAS_BCP_" .. mode, tostring(count))
 end
 
@@ -1160,7 +1251,7 @@ local function onPromoteSelected(_, _)
         local ships = readShipsFromBlackboard() or {}
         if #ships == 0 then
             debug("no ships in blackboard, aborting")
-            notify("PromoteSelected", 0)
+            notifyPromote("PromoteSelected", 0)
             return
         end
         local promoted = 0
@@ -1168,11 +1259,11 @@ local function onPromoteSelected(_, _)
             if promoteInPlace(ship) then promoted = promoted + 1 end
         end
         debug(string.format("PromoteSelected done: %d / %d promoted", promoted, #ships))
-        notify("PromoteSelected", promoted)
+        notifyPromote("PromoteSelected", promoted)
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
-        notify("PromoteSelected", 0)
+        notifyPromote("PromoteSelected", 0)
     end
     flushDebug()
 end
@@ -1187,11 +1278,11 @@ local function onPromoteAll(_, _)
             if promoteInPlace(ship) then promoted = promoted + 1 end
         end
         debug(string.format("PromoteAll done: %d / %d promoted", promoted, #ships))
-        notify("PromoteAll", promoted)
+        notifyPromote("PromoteAll", promoted)
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
-        notify("PromoteAll", 0)
+        notifyPromote("PromoteAll", 0)
     end
     flushDebug()
 end
@@ -1202,14 +1293,14 @@ local function onReshuffleSelected(_, _)
         local ships = readShipsFromBlackboard() or {}
         if #ships == 0 then
             debug("no ships in blackboard, aborting")
-            notify("ReshuffleSelected", 0)
+            pushReshuffleMessage("Done", { 0, 0, 0 })
             return
         end
         reshuffleShips(ships, "ReshuffleSelected")
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
-        notify("ReshuffleSelected", 0)
+        pushReshuffleMessage("Done", { 0, 0, 0 })
     end
     flushDebug()
 end
@@ -1221,7 +1312,7 @@ local function onReshuffleAll(_, _)
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
-        notify("ReshuffleAll", 0)
+        pushReshuffleMessage("Done", { 0, 0, 0 })
     end
     flushDebug()
 end
@@ -1232,14 +1323,14 @@ local function onConfiguredReshuffleSelected(_, _)
         local ships = readShipsFromBlackboard() or {}
         if #ships == 0 then
             debug("no ships in blackboard, aborting")
-            notify("ReshuffleSelected", 0)
+            pushReshuffleMessage("Done", { 0, 0, 0 })
             return
         end
         reshuffleShips(ships, "ReshuffleSelected", readReshuffleConfig())
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
-        notify("ReshuffleSelected", 0)
+        pushReshuffleMessage("Done", { 0, 0, 0 })
     end
     flushDebug()
 end
@@ -1251,7 +1342,7 @@ local function onConfiguredReshuffleAll(_, _)
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
-        notify("ReshuffleAll", 0)
+        pushReshuffleMessage("Done", { 0, 0, 0 })
     end
     flushDebug()
 end
