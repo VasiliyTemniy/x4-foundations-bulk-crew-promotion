@@ -259,16 +259,6 @@
           </actions>
         </library>
 
-        <cue name="Load_Lua_Files" instantiate="true">
-          <conditions>
-            <event_ui_triggered screen="'Lua_Loader'" control="'Ready'"/>
-          </conditions>
-          <actions>
-            <raise_lua_event name="'Lua_Loader.Load'" param="'extensions.vas_bulk_crew_promotion.ui.bulk_crew_promotion'"/>
-            <cancel_cue cue="this"/>
-          </actions>
-        </cue>
-
         <cue name="Add_Interact_Actions" instantiate="true">
           <conditions>
             <event_cue_signalled cue="md.Interact_Menu_API.Get_Actions"/>
