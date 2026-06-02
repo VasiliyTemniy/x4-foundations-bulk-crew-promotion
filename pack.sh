@@ -11,6 +11,7 @@ rm -rf "$PKG"
 mkdir -p "$PKG"
 
 cp    "$ROOT/content.xml" "$PKG/content.xml"
+cp    "$ROOT/ui.xml"      "$PKG/ui.xml"
 cp -r "$ROOT/md"          "$PKG/md"
 cp -r "$ROOT/t"           "$PKG/t"
 cp -r "$ROOT/ui"          "$PKG/ui"
