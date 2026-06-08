@@ -68,6 +68,8 @@ ffi.cdef[[
     uint32_t   GetNumAllRoles(void);
     uint32_t   GetNumAllFactionShips(const char* factionid);
     uint32_t   GetAllFactionShips(UniverseID* result, uint32_t resultlen, const char* factionid);
+    uint32_t   GetNumAllFactionStations(const char* factionid);
+    uint32_t   GetAllFactionStations(UniverseID* result, uint32_t resultlen, const char* factionid);
     bool       IsComponentClass(UniverseID componentid, const char* classname);
     bool       IsUnit(UniverseID controllableid);
     bool       CanControllableHaveControlEntity(UniverseID controllableid, const char* postid);
@@ -136,7 +138,11 @@ local function flushDebug()
 end
 
 local function pushReshuffleMessage(kind, data)
-    SetNPCBlackboard(safePlayerID(), "$vas_bcp_reshuffle_message", data or {})
+    local msg = {}
+    for i, value in ipairs(data or {}) do
+        msg[i] = tostring(value == nil and 0 or value)
+    end
+    SetNPCBlackboard(safePlayerID(), "$vas_bcp_reshuffle_" .. string.lower(kind) .. "_message", msg)
     AddUITriggeredEvent("VAS_BCP_Reshuffle" .. kind, "changed")
 end
 
@@ -232,8 +238,10 @@ local ONSHIP_PROMOTABLE_ROLES = { service = true, marine = true }
 -- this conservative.
 local SPACE_MAKER_ROLES = { service = true, marine = true }
 
-local DEFAULT_POST = "aipilot"
+local PILOT_POST = "aipilot"
+local MANAGER_POST = "manager"
 local PILOTING_SKILL = "piloting"
+local MANAGEMENT_SKILL = "management"
 local BOARDING_SKILL = "boarding"
 local MAX_SKILL_LEVEL = 15
 local RESHUFFLE_SLOT_DELAY = 0.1
@@ -278,6 +286,7 @@ local DEFAULT_RESHUFFLE_CONFIG = {
     sameCommanderOnly = false,
     unassignedShipsOnly = false,
     withoutCaptainOnly = false,
+    includeStationManagers = false,
     preserveEliteMarines = false,
     eliteMarineBoardingThreshold = MAX_SKILL_LEVEL,
 }
@@ -310,6 +319,10 @@ local function shipLabel(id)
         return string.format("%s (%s)", name, idcode)
     end
     return name
+end
+
+local function targetLabel(id)
+    return shipLabel(id)
 end
 
 local function readReshuffleConfig()
@@ -569,15 +582,28 @@ end
 local function getCurrentPilot(ship)
     local pilot = GetComponentData(ship, "assignedaipilot")
     if not pilot or not IsValidComponent(pilot) then
-        return nil, 0, DEFAULT_POST, -1, -1
+        return nil, 0, PILOT_POST, -1, -1
     end
     local pilotLuaID = ConvertStringToLuaID(tostring(pilot))
-    local post = GetComponentData(pilotLuaID, "poststring") or DEFAULT_POST
+    local post = GetComponentData(pilotLuaID, "poststring") or PILOT_POST
     local skill = tonumber(GetComponentData(pilotLuaID, "combinedskill")) or -1
     local piloting = getEntitySkill(pilotLuaID, PILOTING_SKILL)
     -- The pilot's seed: GetComponentData entity returns the entity ID; we use
     -- the entity form in the actor table (entity field) for AssignHiredActor.
     return pilot, 0, post, skill, piloting
+end
+
+local function getCurrentManager(station)
+    local manager = GetComponentData(station, "tradenpc")
+    if not manager or not IsValidComponent(manager) then
+        return nil, 0, MANAGER_POST, -1, -1
+    end
+    local manager64 = ConvertIDTo64Bit(manager)
+    local managerLuaID = ConvertStringToLuaID(tostring(manager))
+    local post = GetComponentData(managerLuaID, "poststring") or MANAGER_POST
+    local skill = tonumber(GetComponentData(managerLuaID, "combinedskill")) or -1
+    local management = getEntitySkill(managerLuaID, MANAGEMENT_SKILL)
+    return manager64, 0, post, skill, management
 end
 
 -- Enumerate the crew of `ship` that match `allowedRoles` (a set keyed by
@@ -631,6 +657,14 @@ local function makePersonActor(container, seed)
     return actor
 end
 
+local function makeEntityActor(entity)
+    local actor = ffi.new("GenericActor")
+    actor.entity = entity or 0
+    actor.personcontrollable = 0
+    actor.personseed = 0
+    return actor
+end
+
 local function logCaptainAssignment(job, slot, cand, totalSkill, note)
     local statKey = string.format("%s candidate%s",
         tostring(cand.roleid), note and (" (" .. note .. ")") or "")
@@ -641,6 +675,20 @@ local function logCaptainAssignment(job, slot, cand, totalSkill, note)
     debug(string.format("  %s <- %s candidate from %s (%spilotingSkill %s -> %s, totalSkill %s -> %s)",
         shipLabel(slot.ship), cand.roleid, shipLabel(cand.container), noteText,
         tostring(slot.oldPiloting), tostring(cand.sortPiloting),
+        tostring(slot.oldSkill), tostring(totalSkill)))
+    notePromotionLogLine()
+end
+
+local function logManagerAssignment(job, slot, cand, totalSkill, note)
+    local statKey = string.format("%s manager candidate%s",
+        tostring(cand.roleid), note and (" (" .. note .. ")") or "")
+    addStat(job, "assignmentStats", statKey)
+    if not logReasonsEach() then return end
+
+    local noteText = note and (note .. "; ") or ""
+    debug(string.format("  %s manager <- %s candidate from %s (%smanagementSkill %s -> %s, totalSkill %s -> %s)",
+        targetLabel(slot.station), cand.roleid, shipLabel(cand.container), noteText,
+        tostring(slot.oldManagement), tostring(cand.sortManagement),
         tostring(slot.oldSkill), tostring(totalSkill)))
     notePromotionLogLine()
 end
@@ -716,11 +764,16 @@ local function onUpdate()
             remaining[#remaining + 1] = retry
         else
             local actor = makePersonActor(retry.cand.container, retry.cand.seed)
-            local reason = ffi.string(C.AssignHiredActor(actor, retry.slot.ship, retry.slot.post, nil, true))
+            local target = retry.slot.station or retry.slot.ship
+            local reason = ffi.string(C.AssignHiredActor(actor, target, retry.slot.post, nil, true))
             if reason == "" then
-                ffi.string(C.AssignHiredActor(actor, retry.slot.ship, retry.slot.post, nil, false))
+                ffi.string(C.AssignHiredActor(actor, target, retry.slot.post, nil, false))
                 retry.job.promoted = retry.job.promoted + 1
-                logCaptainAssignment(retry.job, retry.slot, retry.cand, retry.totalSkill, "delayed retry")
+                if retry.slot.kind == "manager" then
+                    logManagerAssignment(retry.job, retry.slot, retry.cand, retry.totalSkill, "delayed retry")
+                else
+                    logCaptainAssignment(retry.job, retry.slot, retry.cand, retry.totalSkill, "delayed retry")
+                end
                 retry.job.pendingRetries = retry.job.pendingRetries - 1
             elseif reason == "previouspilotbusy" and retry.busyDelayIndex and retry.busyDelayIndex <= #BUSY_PILOT_RETRY_DELAYS then
                 local delay = BUSY_PILOT_RETRY_DELAYS[retry.busyDelayIndex]
@@ -728,15 +781,15 @@ local function onUpdate()
                 retry.time = gameNow + delay
                 remaining[#remaining + 1] = retry
                 if logReasonsEach() then
-                    debug(string.format("    %s: current pilot still busy; retry again in %ss",
-                        shipLabel(retry.slot.ship), tostring(delay)))
+                    debug(string.format("    %s: current post holder still busy; retry again in %ss",
+                        targetLabel(target), tostring(delay)))
                     noteVerboseLogLine()
                 end
             else
                 addStat(retry.job, "candidateSkipStats", retry.cand.roleid .. " | delayed retry failed: " .. compactReason(reason))
                 if logReasonsEach() then
                     debug(string.format("    delayed retry failed for %s <- %s candidate from %s: %s",
-                        shipLabel(retry.slot.ship), retry.cand.roleid, shipLabel(retry.cand.container), reason))
+                        targetLabel(target), retry.cand.roleid, shipLabel(retry.cand.container), reason))
                     noteVerboseLogLine()
                 end
                 retry.job.skippedCapacity = retry.job.skippedCapacity + 1
@@ -790,16 +843,20 @@ local function scheduleRetry(job, slot, cand, totalSkill, delay, busyDelayIndex)
         -- the game and accelerate under SETA.
         time = C.GetCurrentGameTime() + delay,
         slot = {
+            kind = slot.kind,
             ship = slot.ship,
+            station = slot.station,
             post = slot.post,
             oldSkill = slot.oldSkill,
             oldPiloting = slot.oldPiloting,
+            oldManagement = slot.oldManagement,
         },
         cand = {
             seed = cand.seed,
             container = cand.container,
             roleid = cand.roleid,
             sortPiloting = cand.sortPiloting,
+            sortManagement = cand.sortManagement,
         },
         totalSkill = totalSkill,
         busyDelayIndex = busyDelayIndex,
@@ -817,8 +874,8 @@ local function tryMoveOneCrewToDonor(slotShip, donorShip)
 
     local crew = collectCrewByRoles(slotShip, SPACE_MAKER_ROLES)
     table.sort(crew, function(a, b)
-        local askill = C.GetPersonCombinedSkill(a.container, a.seed, nil, DEFAULT_POST)
-        local bskill = C.GetPersonCombinedSkill(b.container, b.seed, nil, DEFAULT_POST)
+        local askill = C.GetPersonCombinedSkill(a.container, a.seed, nil, PILOT_POST)
+        local bskill = C.GetPersonCombinedSkill(b.container, b.seed, nil, PILOT_POST)
         return askill < bskill
     end)
 
@@ -835,6 +892,21 @@ local function tryMoveOneCrewToDonor(slotShip, donorShip)
     return nil, "nodonorroom"
 end
 
+local function tryMoveCurrentManagerToDonor(slot, donorShip)
+    if not slot or not slot.managerEntity or slot.managerEntity == 0 then
+        return nil, "nomanager"
+    end
+
+    local actor = makeEntityActor(slot.managerEntity)
+    local reason, assignedRole = assignToRolePreserving(actor, donorShip, "service", true)
+    if reason == "" then
+        assignToRolePreserving(actor, donorShip, "service", false)
+        return { entity = slot.managerEntity, assignedRole = assignedRole or "service" }, ""
+    end
+
+    return nil, reason ~= "" and reason or "nomove"
+end
+
 -- All player ships, filtered to promotable. Returns a Lua list.
 local function allPromotableShips()
     local n = C.GetNumAllFactionShips("player")
@@ -845,6 +917,21 @@ local function allPromotableShips()
     for i = 0, n - 1 do
         local id = ConvertStringTo64Bit(tostring(buf[i]))
         if isPromotableShip(id) then
+            out[#out + 1] = id
+        end
+    end
+    return out
+end
+
+local function allPlayerStations()
+    local n = C.GetNumAllFactionStations("player")
+    if n == 0 then return {} end
+    local buf = ffi.new("UniverseID[?]", n)
+    n = C.GetAllFactionStations(buf, n, "player")
+    local out = {}
+    for i = 0, n - 1 do
+        local id = ConvertStringTo64Bit(tostring(buf[i]))
+        if isValidUniverseComponent(id) and C.IsComponentClass(id, "station") then
             out[#out + 1] = id
         end
     end
@@ -958,6 +1045,47 @@ local function buildCaptainSlots(ships, config)
     return slots, stats
 end
 
+local function buildManagerSlots(stations)
+    local slots = {}
+    local stats = {
+        targetShipSkipStats = {},
+    }
+    for _, station in ipairs(stations or {}) do
+        if not isValidUniverseComponent(station) or not C.IsComponentClass(station, "station") then
+            addStat(stats, "targetShipSkipStats", "not a valid station")
+        else
+            -- managerEntity may be nil: an UNMANAGED station is still a valid
+            -- target (a candidate fills the empty manager post). oldManagement is
+            -- -1 then, so any real candidate beats it and the post gets filled.
+            local managerEntity, _, _, oldSkill, oldManagement = getCurrentManager(station)
+            if oldManagement >= MAX_SKILL_LEVEL then
+                addStat(stats, "targetShipSkipStats", "manager already management-capped")
+                if logReasonsEach() then
+                    debug(string.format("  %s: manager already management-capped (%s/%s, combined=%s), skip",
+                        targetLabel(station), tostring(oldManagement), tostring(MAX_SKILL_LEVEL), tostring(oldSkill)))
+                    noteVerboseLogLine()
+                end
+            elseif C.CanControllableHaveControlEntity(station, MANAGER_POST) then
+                slots[#slots + 1] = {
+                    kind = "manager",
+                    station = station,
+                    post = MANAGER_POST,
+                    managerEntity = managerEntity,
+                    oldSkill = oldSkill,
+                    oldManagement = oldManagement,
+                }
+            else
+                addStat(stats, "targetShipSkipStats", "station cannot have manager")
+                if logReasonsEach() then
+                    debug(string.format("  %s: cannot hold manager post (skip)", targetLabel(station)))
+                    noteVerboseLogLine()
+                end
+            end
+        end
+    end
+    return slots, stats
+end
+
 -- Walk every ship and collect every promotable-role crew member into the
 -- empire-wide pool. Each entry: { seed, container, roleid, sortPiloting,
 -- sortSkill }. Raw piloting is the primary ordering key; combined assignment
@@ -982,7 +1110,7 @@ local function buildEmpirePool(ships, config)
                 local candidateAllowed, candidateReason = isCandidateCrewAllowedByConfig(p, nil, config)
                 if candidateAllowed then
                     p.sortPiloting = getPersonSkill(p.container, p.seed, PILOTING_SKILL)
-                    p.sortSkill = C.GetPersonCombinedSkill(p.container, p.seed, nil, DEFAULT_POST)
+                    p.sortSkill = C.GetPersonCombinedSkill(p.container, p.seed, nil, PILOT_POST)
                     pool[#pool + 1] = p
                 else
                     addStat(stats, "candidateSkipStats", p.roleid .. " | " .. compactReason(candidateReason))
@@ -1004,15 +1132,31 @@ local function buildEmpirePool(ships, config)
     return pool, stats
 end
 
+local function buildManagerPoolFrom(pool)
+    local managerPool = {}
+    for _, p in ipairs(pool or {}) do
+        p.sortManagement = getPersonSkill(p.container, p.seed, MANAGEMENT_SKILL)
+        p.managerSortSkill = C.GetPersonCombinedSkill(p.container, p.seed, nil, MANAGER_POST)
+        managerPool[#managerPool + 1] = p
+    end
+    table.sort(managerPool, function(a, b)
+        if a.sortManagement ~= b.sortManagement then
+            return a.sortManagement > b.sortManagement
+        end
+        return a.managerSortSkill > b.managerSortSkill
+    end)
+    return managerPool
+end
+
 -- Process one captain slot. The active reshuffle job calls this once per
 -- onUpdate tick, avoiding one huge UI freeze for large fleets. For each slot,
 -- walk the empire-wide pool top-down; the first unused candidate whose combined
 -- assignment skill on THIS slot beats the current pilot and passes
 -- AssignHiredActor(checkonly) gets the post.
 --
--- `slotShips` defines which ships get captain-promoted (the slot list).
+-- `captainSlotShips` defines which ships get captain-promoted (the slot list).
 -- The candidate pool is ALWAYS empire-wide (every player ship's service /
--- marine / unassigned crew), regardless of `slotShips`. That's the whole
+-- marine / unassigned crew), regardless of `captainSlotShips`. That's the whole
 -- point of "reshuffle" vs "promote".
 --
 -- Capacity-aware: if the target is full, first try to move one low-value
@@ -1022,9 +1166,10 @@ end
 -- Other repeated failures still bail out after MAX_FAILURES_PER_SLOT.
 local MAX_FAILURES_PER_SLOT = 3
 
-local function processReshuffleSlot(job, slot)
+local function processReshuffleCaptainSlot(job, slot)
     local found = false
     local failuresInARow = 0
+    local slotCapacityBlocked = false
     local donorsWithoutRoom = {}
     for poolIdx = 1, #job.pool do
         local cand = job.pool[poolIdx]
@@ -1117,7 +1262,7 @@ local function processReshuffleSlot(job, slot)
                         end
                     else
                         failuresInARow = failuresInARow + 1
-                        job.skippedCapacity = job.skippedCapacity + 1
+                        slotCapacityBlocked = true
                         addStat(job, "candidateSkipStats", cand.roleid .. " | nofreespace: " .. compactReason(moveReason))
                         if logReasonsEach() then
                             debug(string.format("    skip cand for %s (nofreespace; could not move crew to donor: %s)",
@@ -1135,7 +1280,7 @@ local function processReshuffleSlot(job, slot)
                     end
                 else
                     failuresInARow = failuresInARow + 1
-                    job.skippedCapacity = job.skippedCapacity + 1
+                    slotCapacityBlocked = true
                     addStat(job, "candidateSkipStats", cand.roleid .. " | capacity/incompat: " .. compactReason(reason))
                     if logReasonsEach() then
                         debug(string.format("    skip %s cand for %s (capacity/incompat: %s)",
@@ -1155,24 +1300,173 @@ local function processReshuffleSlot(job, slot)
         end
     end
     if not found then
-        job.skippedNoCandidate = job.skippedNoCandidate + 1
+        if slotCapacityBlocked then
+            job.skippedCapacity = job.skippedCapacity + 1
+        else
+            job.skippedNoCandidate = job.skippedNoCandidate + 1
+        end
     end
 end
 
-local function reshuffleShips(slotShips, mode, config)
-    if not slotShips or #slotShips == 0 then
+local function processReshuffleManagerSlot(job, slot)
+    local found = false
+    local failuresInARow = 0
+    local slotCapacityBlocked = false
+    local donorsWithoutRoom = {}
+    for poolIdx = 1, #job.managerPool do
+        local cand = job.managerPool[poolIdx]
+        local candidateIdKey = tostring(cand.seed)
+        local donorShipIdKey = tostring(cand.container)
+        if not job.used[candidateIdKey] and not donorsWithoutRoom[donorShipIdKey] then
+            local donorRoleKey = donorRoleCompositeKey(cand)
+            local reserveUsed = job.donorRoleReservations[donorRoleKey] or 0
+            local candidateAllowed, candidateReason = isCandidateCrewAllowedByConfig(cand, nil, job.config, reserveUsed)
+            local s = C.GetPersonCombinedSkill(cand.container, cand.seed, nil, slot.post)
+            local combinedImprovement = s - slot.oldSkill
+            local minCombinedImprovementPercent = tonumber(job.config.minCombinedImprovementPercent) or 0
+            local combinedImprovementPercent = 100
+            if slot.oldSkill > 0 then
+                combinedImprovementPercent = (combinedImprovement / slot.oldSkill) * 100
+            end
+
+            if not candidateAllowed then
+                addStat(job, "candidateSkipStats", cand.roleid .. " | " .. compactReason(candidateReason))
+            elseif combinedImprovement <= 0 then
+                addStat(job, "candidateSkipStats", cand.roleid .. " | no totalSkill improvement")
+            elseif combinedImprovementPercent < minCombinedImprovementPercent then
+                addStat(job, "candidateSkipStats", cand.roleid .. " | below totalSkill improvement threshold")
+            else
+                local actor = makePersonActor(cand.container, cand.seed)
+                local reason = ffi.string(C.AssignHiredActor(actor, slot.station, slot.post, nil, true))
+                if reason == "" then
+                    ffi.string(C.AssignHiredActor(actor, slot.station, slot.post, nil, false))
+                    job.used[candidateIdKey] = true
+                    markCandidateReserved(job, cand)
+                    job.promoted = job.promoted + 1
+                    logManagerAssignment(job, slot, cand, s)
+                    found = true
+                    break
+                elseif reason == "postoccupied" or reason == "nofreespace" then
+                    -- Real X4 station edge: a just-assigned/in-flight manager can
+                    -- reserve the manager post before GetComponentData("tradenpc")
+                    -- exposes an arrived manager entity. In that state we cannot
+                    -- move the current manager aside; treat it as this station slot
+                    -- being blocked for now, not as a missing candidate.
+                    local moved, moveReason = tryMoveCurrentManagerToDonor(slot, cand.container)
+                    if moved then
+                        job.used[candidateIdKey] = true
+                        markCandidateReserved(job, cand)
+                        scheduleRetry(job, slot, cand, s, 1.0)
+                        addStat(job, "retryStats", cand.roleid .. " manager candidate | manager moved")
+                        if logReasonsEach() then
+                            debug(string.format("    moved current manager from %s to donor %s as %s; delayed retry queued for %s candidate",
+                                targetLabel(slot.station), shipLabel(cand.container), moved.assignedRole or "service", cand.roleid))
+                            noteVerboseLogLine()
+                        end
+                        found = true
+                        break
+                    elseif moveReason == "nodonorroom" or moveReason == "nofreespace" then
+                        donorsWithoutRoom[donorShipIdKey] = true
+                        slotCapacityBlocked = true
+                        addStat(job, "candidateSkipStats", cand.roleid .. " | no donor room for current manager")
+                        if logReasonsEach() then
+                            debug(string.format("    donor %s has no room for current manager; trying next donor for %s",
+                                shipLabel(cand.container), targetLabel(slot.station)))
+                            noteVerboseLogLine()
+                        end
+                    elseif moveReason == "nomanager" then
+                        slotCapacityBlocked = true
+                        addStat(job, "targetShipSkipStats", "manager post occupied by pending manager")
+                        if logReasonsEach() then
+                            debug(string.format("    %s: manager post occupied, but no arrived manager entity yet; skip slot",
+                                targetLabel(slot.station)))
+                            noteVerboseLogLine()
+                        end
+                        break
+                    else
+                        failuresInARow = failuresInARow + 1
+                        slotCapacityBlocked = true
+                        addStat(job, "candidateSkipStats", cand.roleid .. " | manager move failed: " .. compactReason(moveReason))
+                        if logReasonsEach() then
+                            debug(string.format("    skip cand for %s (could not move current manager to donor: %s)",
+                                targetLabel(slot.station), moveReason))
+                            noteVerboseLogLine()
+                        end
+                    end
+                elseif reason == "previouspilotbusy" then
+                    job.used[candidateIdKey] = true
+                    markCandidateReserved(job, cand)
+                    scheduleRetry(job, slot, cand, s, BUSY_PILOT_RETRY_DELAYS[1], 2)
+                    addStat(job, "retryStats", cand.roleid .. " manager candidate | current manager busy")
+                    if logReasonsEach() then
+                        debug(string.format("    %s: current manager busy; delayed retry queued in %ss for %s candidate",
+                            targetLabel(slot.station), tostring(BUSY_PILOT_RETRY_DELAYS[1]), cand.roleid))
+                        noteVerboseLogLine()
+                    end
+                    found = true
+                    break
+                else
+                    failuresInARow = failuresInARow + 1
+                    slotCapacityBlocked = true
+                    addStat(job, "candidateSkipStats", cand.roleid .. " | manager capacity/incompat: " .. compactReason(reason))
+                    if logReasonsEach() then
+                        debug(string.format("    skip %s cand for %s manager slot (capacity/incompat: %s)",
+                            cand.roleid, targetLabel(slot.station), reason))
+                        noteVerboseLogLine()
+                    end
+                end
+
+                if failuresInARow >= MAX_FAILURES_PER_SLOT then
+                    if logReasonsEach() then
+                        debug(string.format("    %s: bailing after %d manager assignment failure(s)",
+                            targetLabel(slot.station), failuresInARow))
+                        noteVerboseLogLine()
+                    end
+                    break
+                end
+            end
+        end
+    end
+    if not found then
+        if slotCapacityBlocked then
+            job.skippedCapacity = job.skippedCapacity + 1
+        else
+            job.skippedNoCandidate = job.skippedNoCandidate + 1
+        end
+    end
+end
+
+local function runReshuffle(captainSlotShips, mode, config)
+    if not captainSlotShips or #captainSlotShips == 0 then
         debug("Reshuffle: no slot ships, nothing to do")
         pushReshuffleMessage("Done", { 0, 0, 0 })
         return 0
     end
 
     config = config or defaultReshuffleConfig()
+    local includeManagerTargets = config.includeStationManagers and mode == "ReshuffleAll"
     local empireShips = allPromotableShips()
     local pool, poolStats = buildEmpirePool(empireShips, config)
+    local managerPool = includeManagerTargets and buildManagerPoolFrom(pool) or {}
     flushDebug()
-    local slots, slotStats = buildCaptainSlots(slotShips, config)
-    debug(string.format("Reshuffle: %d slot ship(s), empire pool = %d candidate(s)",
-        #slots, #pool))
+    local slots, slotStats = buildCaptainSlots(captainSlotShips, config)
+    local captainSlotCount = #slots
+    local managerSlots, managerSlotStats = {}, nil
+    if includeManagerTargets then
+        managerSlots, managerSlotStats = buildManagerSlots(allPlayerStations())
+        -- ONE job for both slot kinds: fold station skip reasons into the shared
+        -- stats, and append manager slots AFTER the captain slots so the single
+        -- slot pass runs captains first, then station managers -- one monotonic
+        -- progress bar and one Started/Done lifecycle on the shared UI channel.
+        for key, count in pairs((managerSlotStats and managerSlotStats.targetShipSkipStats) or {}) do
+            addStat(slotStats, "targetShipSkipStats", key, count)
+        end
+        for _, mslot in ipairs(managerSlots) do
+            slots[#slots + 1] = mslot
+        end
+    end
+    debug(string.format("Reshuffle: %d captain slot ship(s), %d station manager slot(s), empire pool = %d candidate(s)",
+        captainSlotCount, #managerSlots, #pool))
     pushReshuffleMessage("Started", {
         #slots,
         #pool,
@@ -1184,6 +1478,7 @@ local function reshuffleShips(slotShips, mode, config)
         mode = mode,
         config = config,
         pool = pool,
+        managerPool = managerPool,
         slots = slots,
         used = {},
         donorRoleReservations = {},
@@ -1201,7 +1496,15 @@ local function reshuffleShips(slotShips, mode, config)
         nextSlot = 1,
         nextTime = getElapsedTime(),
         nextProgressLog = C.GetCurrentGameTime() + RESHUFFLE_PROGRESS_LOG_INTERVAL,
-        processSlot = processReshuffleSlot,
+        -- Dispatch by slot kind. The two processors stay fully separate, but share
+        -- one job: one `used` set, one pool of reservations, one UI lifecycle.
+        processSlot = function(j, slot)
+            if slot.kind == "manager" then
+                processReshuffleManagerSlot(j, slot)
+            else
+                processReshuffleCaptainSlot(j, slot)
+            end
+        end,
     }
     if not updateRegistered then
         updateRegistered = true
@@ -1296,7 +1599,7 @@ local function onReshuffleSelected(_, _)
             pushReshuffleMessage("Done", { 0, 0, 0 })
             return
         end
-        reshuffleShips(ships, "ReshuffleSelected")
+        runReshuffle(ships, "ReshuffleSelected")
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
@@ -1308,7 +1611,7 @@ end
 local function onReshuffleAll(_, _)
     local ok, err = pcall(function()
         debug("== ReshuffleAll ==")
-        reshuffleShips(allPromotableShips(), "ReshuffleAll")
+        runReshuffle(allPromotableShips(), "ReshuffleAll")
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
@@ -1326,7 +1629,7 @@ local function onConfiguredReshuffleSelected(_, _)
             pushReshuffleMessage("Done", { 0, 0, 0 })
             return
         end
-        reshuffleShips(ships, "ReshuffleSelected", readReshuffleConfig())
+        runReshuffle(ships, "ReshuffleSelected", readReshuffleConfig())
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))
@@ -1338,7 +1641,7 @@ end
 local function onConfiguredReshuffleAll(_, _)
     local ok, err = pcall(function()
         debug("== ReshuffleAll (configured) ==")
-        reshuffleShips(allPromotableShips(), "ReshuffleAll", readReshuffleConfig())
+        runReshuffle(allPromotableShips(), "ReshuffleAll", readReshuffleConfig())
     end)
     if not ok then
         debug("ERROR: " .. tostring(err))

@@ -69,6 +69,7 @@
         <set_value name="$sameCommanderOnly" exact="false"/>
         <set_value name="$unassignedShipsOnly" exact="false"/>
         <set_value name="$withoutCaptainOnly" exact="false"/>
+        <set_value name="$includeStationManagers" exact="false"/>
         <set_value name="$preserveEliteMarines" exact="true"/>
         <set_value name="$eliteMarineBoardingThreshold" exact="12"/>
       </actions>
@@ -252,6 +253,7 @@
               $sameCommanderOnly = md.VAS_BulkCrewPromotion.ModConfig.$sameCommanderOnly,
               $unassignedShipsOnly = md.VAS_BulkCrewPromotion.ModConfig.$unassignedShipsOnly,
               $withoutCaptainOnly = md.VAS_BulkCrewPromotion.ModConfig.$withoutCaptainOnly,
+              $includeStationManagers = md.VAS_BulkCrewPromotion.ModConfig.$includeStationManagers,
               $preserveEliteMarines = md.VAS_BulkCrewPromotion.ModConfig.$preserveEliteMarines,
               $eliteMarineBoardingThreshold = md.VAS_BulkCrewPromotion.ModConfig.$eliteMarineBoardingThreshold,
             ]"/>
@@ -447,6 +449,10 @@
               <set_value name="$cfg" exact="global.$vas_bcp_config"/>
               <set_value name="$title" exact="{202600530,21}"/>
             </do_else>
+            <do_if value="@player.entity.$vas_bcp_config_menu_mode != 'defaults' and (@$cfg.$includeStationManagers + '') == 'null'">
+              <set_value name="$cfg.$includeStationManagers" exact="false"/>
+              <set_value name="player.entity.$vas_bcp_config.$includeStationManagers" exact="false"/>
+            </do_if>
 
             <signal_cue_instantly cue="md.Simple_Menu_API.Create_Menu" param="table[
               $id = 'vas_bcp_config_menu',
@@ -669,6 +675,12 @@
             <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'withoutCaptainOnly', $echo = 'withoutCaptainOnly', $checked = $cfg.$withoutCaptainOnly, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
             <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,110}, $halign = 'left']"/>
 
+            <do_if value="@player.entity.$vas_bcp_config_menu_mode != 'defaults' and @player.entity.$vas_bcp_config_run_mode == 'all'">
+              <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+              <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'includeStationManagers', $echo = 'includeStationManagers', $checked = $cfg.$includeStationManagers, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+              <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,111}, $halign = 'left']"/>
+            </do_if>
+
             <!-- Spacer -->
             <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
             <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
@@ -834,7 +846,7 @@
             <event_ui_triggered screen="'VAS_BCP_ReshuffleStarted'"/>
           </conditions>
           <actions>
-            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_started_message"/>
             <show_notification text="{202600530,15}.[$msg.{1}, $msg.{2}, $msg.{3}, $msg.{4}]" timeout="5s"/>
             <reset_cue cue="this"/>
           </actions>
@@ -845,7 +857,7 @@
             <event_ui_triggered screen="'VAS_BCP_ReshuffleProgress'"/>
           </conditions>
           <actions>
-            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_progress_message"/>
             <show_notification text="{202600530,16}.[$msg.{1}, $msg.{2}, $msg.{3}, $msg.{4}]" timeout="5s"/>
             <reset_cue cue="this"/>
           </actions>
@@ -856,7 +868,7 @@
             <event_ui_triggered screen="'VAS_BCP_ReshuffleWaiting'"/>
           </conditions>
           <actions>
-            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_waiting_message"/>
             <show_notification text="{202600530,17}.[$msg.{1}, $msg.{2}]" timeout="7s"/>
             <write_to_logbook category="upkeep" title="{202600530,14}" text="{202600530,17}.[$msg.{1}, $msg.{2}]" interaction="showonmap"/>
             <reset_cue cue="this"/>
@@ -868,7 +880,7 @@
             <event_ui_triggered screen="'VAS_BCP_ReshuffleDone'"/>
           </conditions>
           <actions>
-            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_message"/>
+            <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_done_message"/>
             <show_notification text="{202600530,18}.[$msg.{1}, $msg.{2}, $msg.{3}]" timeout="7s"/>
             <write_to_logbook category="upkeep" title="{202600530,14}" text="{202600530,18}.[$msg.{1}, $msg.{2}, $msg.{3}]" interaction="showonmap"/>
             <reset_cue cue="this"/>

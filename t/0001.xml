@@ -15,10 +15,10 @@
     <t id="12">Bulk Crew Promotion: reshuffled %1 captains from empire pool.</t>
     <t id="13">Bulk Crew Promotion: no improvements possible.</t>
     <t id="14">Bulk Crew Promotion</t>
-    <t id="15">Bulk Crew Promotion: reshuffle started - %1 target ships, %2 candidates, %3 donor ships skipped, %4 crew members skipped by config.</t>
-    <t id="16">Bulk Crew Promotion: reshuffle progress - %1/%2 ships checked, %3 captains improved, %4 delayed assignments pending.</t>
-    <t id="17">Bulk Crew Promotion: ship pass complete - %1 captains improved, %2 delayed assignments still pending.</t>
-    <t id="18">Bulk Crew Promotion: reshuffle complete - %1 captains improved, %2 ships had no better candidate, %3 capacity/incompatibility skips.</t>
+    <t id="15">Bulk Crew Promotion: reshuffle started - %1 target slots, %2 candidates, %3 donor ships skipped, %4 crew members skipped by config.</t>
+    <t id="16">Bulk Crew Promotion: reshuffle progress - %1/%2 targets checked, %3 assignments improved, %4 delayed assignments pending.</t>
+    <t id="17">Bulk Crew Promotion: target pass complete - %1 assignments improved, %2 delayed assignments still pending - will be handled in the background.</t>
+    <t id="18">Bulk Crew Promotion: reshuffle complete - %1 assignments improved, %2 targets had no better candidate, %3 capacity/incompatibility skips.</t>
 
     <!-- Configuration menu -->
     <!-- Menu and window titles -->
@@ -81,6 +81,7 @@
 
     <!-- Additional target filter checkboxes -->
     <t id="110">Only target ships without a captain</t>
+    <t id="111">Try to reshuffle all station managers</t>
 
     <!-- Marine protection -->
     <t id="120">Preserve elite marines</t>

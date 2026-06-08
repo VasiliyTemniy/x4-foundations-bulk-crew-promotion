@@ -17,7 +17,7 @@ The vanilla map already has a useful one-ship action: replace the current pilot 
 [*][b]Promote best crew on all ships[/b] — [i]Whole empire.[/i] Same local promotion pass, but for every player ship.
 [*][b]Reshuffle captains, empire pool[/b] — [i]Selected ships.[/i] Immediate reshuffle using lax defaults. Preserves the original quick behavior.
 [*][b]Reshuffle captains with config, empire pool[/b] — [i]Selected ships.[/i] Opens the reshuffle config window, then runs against selected ships.
-[*][b]Reshuffle captains on all ships[/b] — [i]Whole empire.[/i] Opens the reshuffle config window, then runs against every eligible player ship.
+[*][b]Reshuffle captains on all ships[/b] — [i]Whole empire.[/i] Opens the reshuffle config window, then runs against every eligible player ship. Can also include station managers (see below).
 [/list]
 
 Selected-ship actions appear when right-clicking a player ship, or when right-clicking free sector space while player ships are selected. Whole-empire actions are shown on the player HQ by default.
@@ -60,6 +60,10 @@ Implemented configured options:
 [*][b]Additional target filters.[/b] Optionally target only ships without a captain.
 [*][b]Marine protection.[/b] Preserve marines whose boarding skill is at or above a configured threshold.
 [/list]
+
+[size=4][b]Station Manager Reshuffle[/b][/size]
+
+The whole-empire reshuffle config window includes a [b]Try to reshuffle all station managers[/b] checkbox. This option only appears in the HQ menu — not in selected-ship menus — because the game does not currently support selecting multiple stations. When enabled, station manager posts are included as reshuffle targets alongside ship captain slots: the same empire-wide candidate pool is used, but candidates are ranked by management skill instead of piloting. If every target ship is excluded by purpose or size filters, the reshuffle will still run for station managers alone.
 
 [size=4][b]Reshuffle Details[/b][/size]
 
