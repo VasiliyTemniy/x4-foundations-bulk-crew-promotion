@@ -4,8 +4,8 @@
   name="[VAS] Bulk Crew Promotion"
   description="Adds right-click actions to bulk-promote the best available crew members to pilot / captain. Two scopes: on the currently selected player ships, on every player ship empire-wide. Plus an empire-wide reshuffle that pulls the best service / marine / unassigned crew from across the empire and moves them to fill the captain slots."
   author="VasiliyTemniy"
-  version="121"
-  date="2026-06-08"
+  version="122"
+  date="2026-06-12"
   save="0">
   <dependency id="ws_2042901274" optional="false" name="SirNukes Mod Support APIs"/>
 </content>
