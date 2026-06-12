@@ -1,0 +1,720 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdscript xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="VAS_BulkCrewPromotion_Interact" xsi:noNamespaceSchemaLocation="md.xsd">
+  <!--
+    Player-action UI for Bulk Crew Promotion: the right-click interact-menu
+    entries, the run-options window, and the Lua progress/result listeners.
+    Config state lives in bulk_crew_promotion.xml (VAS_BulkCrewPromotion.ModConfig,
+    read/written cross-script); the Extension Options UI lives in
+    bulk_crew_promotion_config_menu.xml (VAS_BulkCrewPromotion_Config).
+  -->
+  <cues>
+
+    <library name="ResetConfigDefaults" purpose="run_actions">
+      <actions>
+        <set_value name="global.$vas_bcp_config" exact="table[
+          $targetIncludeMilitary = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeMilitary,
+          $targetIncludeMiners = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeMiners,
+          $targetIncludeTraders = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeTraders,
+          $targetIncludeBuilders = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeBuilders,
+          $targetIncludeSalvage = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeSalvage,
+          $targetIncludeAuxiliary = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeAuxiliary,
+          $targetIncludeOther = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeOther,
+          $targetIncludeShipS = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeShipS,
+          $targetIncludeShipM = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeShipM,
+          $targetIncludeShipL = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeShipL,
+          $targetIncludeShipXL = md.VAS_BulkCrewPromotion.ModConfig.$targetIncludeShipXL,
+          $donorIncludeMilitary = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeMilitary,
+          $donorIncludeMiners = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeMiners,
+          $donorIncludeTraders = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeTraders,
+          $donorIncludeBuilders = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeBuilders,
+          $donorIncludeSalvage = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeSalvage,
+          $donorIncludeAuxiliary = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeAuxiliary,
+          $donorIncludeOther = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeOther,
+          $donorIncludeShipS = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeShipS,
+          $donorIncludeShipM = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeShipM,
+          $donorIncludeShipL = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeShipL,
+          $donorIncludeShipXL = md.VAS_BulkCrewPromotion.ModConfig.$donorIncludeShipXL,
+          $candidateService = md.VAS_BulkCrewPromotion.ModConfig.$candidateService,
+          $candidateMarine = md.VAS_BulkCrewPromotion.ModConfig.$candidateMarine,
+          $candidateUnassigned = md.VAS_BulkCrewPromotion.ModConfig.$candidateUnassigned,
+          $donorReserveCivilianService = md.VAS_BulkCrewPromotion.ModConfig.$donorReserveCivilianService,
+          $donorReserveCivilianMarine = md.VAS_BulkCrewPromotion.ModConfig.$donorReserveCivilianMarine,
+          $donorReserveMilitaryService = md.VAS_BulkCrewPromotion.ModConfig.$donorReserveMilitaryService,
+          $donorReserveMilitaryMarine = md.VAS_BulkCrewPromotion.ModConfig.$donorReserveMilitaryMarine,
+          $recipientMinHull = md.VAS_BulkCrewPromotion.ModConfig.$recipientMinHull,
+          $recipientMinShield = md.VAS_BulkCrewPromotion.ModConfig.$recipientMinShield,
+          $minPilotingImprovement = md.VAS_BulkCrewPromotion.ModConfig.$minPilotingImprovement,
+          $minCombinedImprovementPercent = md.VAS_BulkCrewPromotion.ModConfig.$minCombinedImprovementPercent,
+          $sameCommanderOnly = md.VAS_BulkCrewPromotion.ModConfig.$sameCommanderOnly,
+          $unassignedShipsOnly = md.VAS_BulkCrewPromotion.ModConfig.$unassignedShipsOnly,
+          $withoutCaptainOnly = md.VAS_BulkCrewPromotion.ModConfig.$withoutCaptainOnly,
+          $includeStationManagers = md.VAS_BulkCrewPromotion.ModConfig.$includeStationManagers,
+          $preserveEliteMarines = md.VAS_BulkCrewPromotion.ModConfig.$preserveEliteMarines,
+          $eliteMarineBoardingThreshold = md.VAS_BulkCrewPromotion.ModConfig.$eliteMarineBoardingThreshold,
+        ]"/>
+        <set_value name="player.entity.$vas_bcp_config" exact="global.$vas_bcp_config"/>
+      </actions>
+    </library>
+
+    <cue name="Add_Interact_Actions" instantiate="true">
+      <conditions>
+        <event_cue_signalled cue="md.Interact_Menu_API.Get_Actions"/>
+      </conditions>
+      <actions>
+        <set_value name="$target" exact="@event.param.$object"/>
+        <set_value name="$ships"  exact="@event.param.$selectedplayerships"/>
+
+        <!-- Direct right-click on a player ship with nothing else selected.
+             Uses 'interaction' ("Actions" header) since 'selected_orders'
+             is only rendered when selectedplayerships is non-empty. -->
+        <do_if value="@$target.isclass.ship and $target.owner == faction.player and @$ships.{1} == null">
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_promote_selected',
+            $section  = 'interaction',
+            $text     = {202600530,1},
+            $callback = PromoteSelected,
+          ]"/>
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_reshuffle_selected',
+            $section  = 'interaction',
+            $text     = {202600530,3},
+            $callback = ReshuffleSelected,
+          ]"/>
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_reshuffle_selected_configured',
+            $section  = 'interaction',
+            $text     = {202600530,5},
+            $callback = OpenConfiguredReshuffleSelected,
+          ]"/>
+        </do_if>
+
+        <!-- Selected-ships scope. Covers: ship clicked while ships are selected,
+             or right-click on free map space with selected ships. -->
+        <do_if value="((@$target.isclass.ship and $target.owner == faction.player) and @$ships.{1} != null)
+                        or (@$target.isclass.sector and @$ships.{1} != null)">
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_promote_selected',
+            $section  = 'selected_orders',
+            $text     = {202600530,1},
+            $callback = PromoteSelected,
+          ]"/>
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_reshuffle_selected',
+            $section  = 'selected_orders',
+            $text     = {202600530,3},
+            $callback = ReshuffleSelected,
+          ]"/>
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_reshuffle_selected_configured',
+            $section  = 'selected_orders',
+            $text     = {202600530,5},
+            $callback = OpenConfiguredReshuffleSelected,
+          ]"/>
+        </do_if>
+
+        <!-- Whole-fleet scope. By default only on the player's own PHQ; the
+             options menu can allow these actions on every player station. -->
+        <do_if value="@$target.isclass.station and $target.owner == faction.player
+                        and ((md.VAS_BulkCrewPromotion.ModConfig.$allActionsOnlyOnHQ and @player.headquarters and $target == player.headquarters)
+                          or not md.VAS_BulkCrewPromotion.ModConfig.$allActionsOnlyOnHQ)">
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_promote_all',
+            $section  = 'main',
+            $text     = {202600530,2},
+            $callback = PromoteAll,
+          ]"/>
+          <signal_cue_instantly cue="md.Interact_Menu_API.Add_Action" param="table[
+            $id       = 'vas_bcp_reshuffle_all',
+            $section  = 'main',
+            $text     = {202600530,4},
+            $callback = OpenConfiguredReshuffleAll,
+          ]"/>
+        </do_if>
+
+        <cancel_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="PromoteSelected">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <!-- Stash target + selection separately. Lua takes the deduped union so
+             the right-clicked ship is always in the roster, while invalid
+             sector/free-space targets are filtered before C API calls. -->
+        <set_value name="player.entity.$vas_bcp_ships" exact="table[
+          $target = @event.param.$object,
+          $others = @event.param.$selectedplayerships,
+        ]"/>
+        <raise_lua_event name="'VAS_BCP.PromoteSelected'" param="0"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="PromoteAll">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <raise_lua_event name="'VAS_BCP.PromoteAll'" param="0"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="ReshuffleSelected">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <set_value name="player.entity.$vas_bcp_ships" exact="table[
+          $target = @event.param.$object,
+          $others = @event.param.$selectedplayerships,
+        ]"/>
+        <raise_lua_event name="'VAS_BCP.ReshuffleSelected'" param="0"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="ReshuffleAll">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <raise_lua_event name="'VAS_BCP.ReshuffleAll'" param="0"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OpenDefaultReshuffleConfigFromOptions" instantiate="true">
+      <conditions>
+        <event_cue_signalled cue="md.VAS_BulkCrewPromotion_Config.OpenDefaultReshuffleConfig"/>
+      </conditions>
+      <actions>
+        <set_value name="player.entity.$vas_bcp_config_menu_mode" exact="'defaults'"/>
+        <signal_cue_instantly cue="BuildConfigMenu"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OpenConfiguredReshuffleSelected">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <set_value name="player.entity.$vas_bcp_ships" exact="table[
+          $target = @event.param.$object,
+          $others = @event.param.$selectedplayerships,
+        ]"/>
+        <set_value name="player.entity.$vas_bcp_config_run_mode" exact="'selected'"/>
+        <set_value name="player.entity.$vas_bcp_config_menu_mode" exact="'run'"/>
+        <do_if value="not @global.$vas_bcp_config">
+          <run_actions ref="ResetConfigDefaults"/>
+        </do_if>
+        <signal_cue_instantly cue="BuildConfigMenu"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OpenConfiguredReshuffleAll">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <set_value name="player.entity.$vas_bcp_config_run_mode" exact="'all'"/>
+        <set_value name="player.entity.$vas_bcp_config_menu_mode" exact="'run'"/>
+        <do_if value="not @global.$vas_bcp_config">
+          <run_actions ref="ResetConfigDefaults"/>
+        </do_if>
+        <signal_cue_instantly cue="BuildConfigMenu"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="BuildConfigMenu" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <do_if value="@player.entity.$vas_bcp_config_menu_mode == 'defaults'">
+          <set_value name="$cfg" exact="md.VAS_BulkCrewPromotion.ModConfig"/>
+          <set_value name="$title" exact="{202600530,22}"/>
+        </do_if>
+        <do_else>
+          <set_value name="$cfg" exact="global.$vas_bcp_config"/>
+          <set_value name="$title" exact="{202600530,21}"/>
+        </do_else>
+        <do_if value="@player.entity.$vas_bcp_config_menu_mode != 'defaults' and (@$cfg.$includeStationManagers + '') == 'null'">
+          <set_value name="$cfg.$includeStationManagers" exact="false"/>
+          <set_value name="player.entity.$vas_bcp_config.$includeStationManagers" exact="false"/>
+        </do_if>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Create_Menu" param="table[
+          $id = 'vas_bcp_config_menu',
+          $columns = 4,
+          $title = $title,
+          $width = 1040,
+        ]"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Call_Table_Method" param="table[
+          $method = 'setColWidth',
+          $col = 1,
+          $width = 'Helper.standardButtonWidth',
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Call_Table_Method" param="table[
+          $method = 'setColWidth',
+          $col = 2,
+          $width = 490,
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Call_Table_Method" param="table[
+          $method = 'setColWidth',
+          $col = 3,
+          $width = 'Helper.standardButtonWidth',
+        ]"/>
+        <!-- <signal_cue_instantly cue="md.Simple_Menu_API.Call_Table_Method" param="table[
+          $method = 'setColWidth',
+          $col = 4,
+          $width = 490,
+        ]"/> --> <!-- col width not set for one column to make sure it's variable -->
+
+        <!-- Target and donor ship filters -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[
+          $col = 1,
+          $colSpan = 2,
+          $text = {202600530,40},
+          $font = 'Helper.standardFontBold',
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[
+          $col = 3,
+          $colSpan = 2,
+          $text = {202600530,41},
+          $font = 'Helper.standardFontBold',
+        ]"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeMilitary', $echo = 'targetIncludeMilitary', $checked = $cfg.$targetIncludeMilitary, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,50}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeMilitary', $echo = 'donorIncludeMilitary', $checked = $cfg.$donorIncludeMilitary, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,50}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeMiners', $echo = 'targetIncludeMiners', $checked = $cfg.$targetIncludeMiners, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,52}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeMiners', $echo = 'donorIncludeMiners', $checked = $cfg.$donorIncludeMiners, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,52}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeTraders', $echo = 'targetIncludeTraders', $checked = $cfg.$targetIncludeTraders, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,53}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeTraders', $echo = 'donorIncludeTraders', $checked = $cfg.$donorIncludeTraders, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,53}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeBuilders', $echo = 'targetIncludeBuilders', $checked = $cfg.$targetIncludeBuilders, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,54}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeBuilders', $echo = 'donorIncludeBuilders', $checked = $cfg.$donorIncludeBuilders, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,54}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeSalvage', $echo = 'targetIncludeSalvage', $checked = $cfg.$targetIncludeSalvage, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,55}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeSalvage', $echo = 'donorIncludeSalvage', $checked = $cfg.$donorIncludeSalvage, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,55}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeAuxiliary', $echo = 'targetIncludeAuxiliary', $checked = $cfg.$targetIncludeAuxiliary, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,56}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeAuxiliary', $echo = 'donorIncludeAuxiliary', $checked = $cfg.$donorIncludeAuxiliary, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,56}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeOther', $echo = 'targetIncludeOther', $checked = $cfg.$targetIncludeOther, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,57}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeOther', $echo = 'donorIncludeOther', $checked = $cfg.$donorIncludeOther, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,57}, $halign = 'left']"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Ship size filters -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,49}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeShipS', $echo = 'targetIncludeShipS', $checked = $cfg.$targetIncludeShipS, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,140}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeShipS', $echo = 'donorIncludeShipS', $checked = $cfg.$donorIncludeShipS, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,140}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeShipM', $echo = 'targetIncludeShipM', $checked = $cfg.$targetIncludeShipM, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,141}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeShipM', $echo = 'donorIncludeShipM', $checked = $cfg.$donorIncludeShipM, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,141}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeShipL', $echo = 'targetIncludeShipL', $checked = $cfg.$targetIncludeShipL, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,142}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeShipL', $echo = 'donorIncludeShipL', $checked = $cfg.$donorIncludeShipL, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,142}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'targetIncludeShipXL', $echo = 'targetIncludeShipXL', $checked = $cfg.$targetIncludeShipXL, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $text = {202600530,143}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 3, $id = 'donorIncludeShipXL', $echo = 'donorIncludeShipXL', $checked = $cfg.$donorIncludeShipXL, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 4, $text = {202600530,143}, $halign = 'left']"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Candidate roles -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,42}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'candidateService', $echo = 'candidateService', $checked = $cfg.$candidateService, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,60}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'candidateMarine', $echo = 'candidateMarine', $checked = $cfg.$candidateMarine, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,61}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'candidateUnassigned', $echo = 'candidateUnassigned', $checked = $cfg.$candidateUnassigned, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,62}, $halign = 'left']"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Donor protection -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,43}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,70}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'donorReserveCivilianService', $echo = 'donorReserveCivilianService', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 100, $step = 5, $start = $cfg.$donorReserveCivilianService, $suffix = ' %', $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,71}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'donorReserveCivilianMarine', $echo = 'donorReserveCivilianMarine', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 100, $step = 5, $start = $cfg.$donorReserveCivilianMarine, $suffix = ' %', $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,72}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'donorReserveMilitaryService', $echo = 'donorReserveMilitaryService', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 100, $step = 5, $start = $cfg.$donorReserveMilitaryService, $suffix = ' %', $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,73}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'donorReserveMilitaryMarine', $echo = 'donorReserveMilitaryMarine', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 100, $step = 5, $start = $cfg.$donorReserveMilitaryMarine, $suffix = ' %', $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Recipient safety -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,44}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,80}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'recipientMinHull', $echo = 'recipientMinHull', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 100, $step = 5, $start = $cfg.$recipientMinHull, $suffix = ' %', $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,81}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'recipientMinShield', $echo = 'recipientMinShield', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 100, $step = 5, $start = $cfg.$recipientMinShield, $suffix = ' %', $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Improvement thresholds -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,45}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,90}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'minPilotingImprovement', $echo = 'minPilotingImprovement', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 15, $step = 1, $start = $cfg.$minPilotingImprovement, $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,91}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'minCombinedImprovementPercent', $echo = 'minCombinedImprovementPercent', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 100, $step = 5, $start = $cfg.$minCombinedImprovementPercent, $suffix = ' %', $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Fleet filters -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,46}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'sameCommanderOnly', $echo = 'sameCommanderOnly', $checked = $cfg.$sameCommanderOnly, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,100}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'unassignedShipsOnly', $echo = 'unassignedShipsOnly', $checked = $cfg.$unassignedShipsOnly, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,101}, $halign = 'left']"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Special target ships filters -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,47}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'withoutCaptainOnly', $echo = 'withoutCaptainOnly', $checked = $cfg.$withoutCaptainOnly, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,110}, $halign = 'left']"/>
+
+        <do_if value="@player.entity.$vas_bcp_config_menu_mode != 'defaults' and @player.entity.$vas_bcp_config_run_mode == 'all'">
+          <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+          <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'includeStationManagers', $echo = 'includeStationManagers', $checked = $cfg.$includeStationManagers, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+          <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,111}, $halign = 'left']"/>
+        </do_if>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <!-- Marine protection -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $text = {202600530,48}, $font = 'Helper.standardFontBold']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[$col = 1, $id = 'preserveEliteMarines', $echo = 'preserveEliteMarines', $checked = $cfg.$preserveEliteMarines, $width = 'Helper.standardButtonWidth', $height = 'Helper.standardButtonWidth', $onClick = OnConfigCheckboxChanged]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 2, $colSpan = 3, $text = {202600530,120}, $halign = 'left']"/>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 2, $text = {202600530,121}, $halign = 'left']"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Slider" param="table[$col = 3, $colSpan = 2, $id = 'eliteMarineBoardingThreshold', $echo = 'eliteMarineBoardingThreshold', $height = 'Helper.slidercellMinHeight', $min = 0, $max = 15, $step = 1, $start = $cfg.$eliteMarineBoardingThreshold, $onSliderCellConfirm = OnConfigSliderChanged]"/>
+
+        <!-- Spacer -->
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[$selectable = false, $borderBelow = true]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[$col = 1, $colSpan = 4, $height = 'Helper.borderSize', $fontsize = 1, $cellBGColor = 'Color.row_separator_white']"/>
+
+        <do_if value="@player.entity.$vas_bcp_config_menu_mode != 'defaults'">
+          <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+          <signal_cue_instantly cue="md.Simple_Menu_API.Make_Button" param="table[
+            $col = 1,
+            $colSpan = 2,
+            $id = 'vas_bcp_run_configured_reshuffle',
+            $text = table[$text = {202600530,130}, $halign = 'center'],
+            $onClick = RunConfiguredReshuffle,
+          ]"/>
+          <signal_cue_instantly cue="md.Simple_Menu_API.Make_Button" param="table[
+            $col = 3,
+            $colSpan = 2,
+            $id = 'vas_bcp_reset_config',
+            $text = table[$text = {202600530,132}, $halign = 'center'],
+            $onClick = OnConfigResetClicked,
+          ]"/>
+        </do_if>
+        <do_else>
+          <!-- A button to confirm defaults changed - calls reset config clicked,
+               which takes ModOptions and applies them.
+               Without this, default config does not propagate correctly -->
+          <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+          <signal_cue_instantly cue="md.Simple_Menu_API.Make_Button" param="table[
+            $col = 1,
+            $colSpan = 4,
+            $id = 'vas_bcp_reset_config',
+            $text = table[$text = {202600530,131}, $halign = 'center'],
+            $onClick = OnConfigResetClicked,
+          ]"/>
+        </do_else>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row" param="table[]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Button" param="table[
+          $col = 1,
+          $colSpan = 4,
+          $id = 'vas_bcp_close_config',
+          $text = table[$text = {202600530,133}, $halign = 'center'],
+          $onClick = OnConfigCloseClicked,
+        ]"/>
+
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="RunConfiguredReshuffle" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Close_Menu"/>
+        <do_if value="@player.entity.$vas_bcp_config_run_mode == 'selected'">
+          <raise_lua_event name="'VAS_BCP.ReshuffleSelectedConfigured'" param="0"/>
+        </do_if>
+        <do_else>
+          <raise_lua_event name="'VAS_BCP.ReshuffleAllConfigured'" param="0"/>
+        </do_else>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnConfigCheckboxChanged" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <set_value name="$key" exact="@event.param.$echo"/>
+        <do_if value="@$key">
+          <do_if value="@player.entity.$vas_bcp_config_menu_mode == 'defaults'">
+            <set_value name="md.VAS_BulkCrewPromotion.ModConfig.{'$' + $key}" exact="if event.param.$checked then true else false"/>
+          </do_if>
+          <do_else>
+            <set_value name="global.$vas_bcp_config.{'$' + $key}" exact="if event.param.$checked then true else false"/>
+            <set_value name="player.entity.$vas_bcp_config.{'$' + $key}" exact="global.$vas_bcp_config.{'$' + $key}"/>
+          </do_else>
+        </do_if>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnConfigSliderChanged" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <set_value name="$key" exact="@event.param.$echo"/>
+        <do_if value="@$key">
+          <do_if value="@player.entity.$vas_bcp_config_menu_mode == 'defaults'">
+            <set_value name="md.VAS_BulkCrewPromotion.ModConfig.{'$' + $key}" exact="event.param.$value"/>
+          </do_if>
+          <do_else>
+            <set_value name="global.$vas_bcp_config.{'$' + $key}" exact="event.param.$value"/>
+            <set_value name="player.entity.$vas_bcp_config.{'$' + $key}" exact="global.$vas_bcp_config.{'$' + $key}"/>
+          </do_else>
+        </do_if>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnConfigDropdownChanged" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <set_value name="$key" exact="@event.param.$echo"/>
+        <do_if value="@$key and @event.param.$option.$id">
+          <do_if value="@player.entity.$vas_bcp_config_menu_mode == 'defaults'">
+            <set_value name="md.VAS_BulkCrewPromotion.ModConfig.{'$' + $key}" exact="event.param.$option.$id"/>
+          </do_if>
+          <do_else>
+            <set_value name="global.$vas_bcp_config.{'$' + $key}" exact="event.param.$option.$id"/>
+            <set_value name="player.entity.$vas_bcp_config.{'$' + $key}" exact="global.$vas_bcp_config.{'$' + $key}"/>
+          </do_else>
+        </do_if>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnConfigResetClicked" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <run_actions ref="ResetConfigDefaults"/>
+        <signal_cue_instantly cue="BuildConfigMenu"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnConfigCloseClicked" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Close_Menu"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <!-- Reshuffle lifecycle listeners. Lua sends numeric data in
+         event.param2. MD owns translated player-facing text. -->
+    <cue name="OnReshuffleStarted" instantiate="true">
+      <conditions>
+        <event_ui_triggered screen="'VAS_BCP_ReshuffleStarted'"/>
+      </conditions>
+      <actions>
+        <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_started_message"/>
+        <show_notification text="{202600530,15}.[$msg.{1}, $msg.{2}, $msg.{3}, $msg.{4}]" timeout="5s"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnReshuffleProgress" instantiate="true">
+      <conditions>
+        <event_ui_triggered screen="'VAS_BCP_ReshuffleProgress'"/>
+      </conditions>
+      <actions>
+        <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_progress_message"/>
+        <show_notification text="{202600530,16}.[$msg.{1}, $msg.{2}, $msg.{3}, $msg.{4}]" timeout="5s"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnReshuffleWaiting" instantiate="true">
+      <conditions>
+        <event_ui_triggered screen="'VAS_BCP_ReshuffleWaiting'"/>
+      </conditions>
+      <actions>
+        <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_waiting_message"/>
+        <show_notification text="{202600530,17}.[$msg.{1}, $msg.{2}]" timeout="7s"/>
+        <write_to_logbook category="upkeep" title="{202600530,14}" text="{202600530,17}.[$msg.{1}, $msg.{2}]" interaction="showonmap"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnReshuffleDone" instantiate="true">
+      <conditions>
+        <event_ui_triggered screen="'VAS_BCP_ReshuffleDone'"/>
+      </conditions>
+      <actions>
+        <set_value name="$msg" exact="player.entity.$vas_bcp_reshuffle_done_message"/>
+        <show_notification text="{202600530,18}.[$msg.{1}, $msg.{2}, $msg.{3}]" timeout="7s"/>
+        <write_to_logbook category="upkeep" title="{202600530,14}" text="{202600530,18}.[$msg.{1}, $msg.{2}, $msg.{3}]" interaction="showonmap"/>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <!-- Promote result listeners. Lua signals via AddUITriggeredEvent with the
+         promoted count as the value parameter; event.param2 is the count
+         as a string. show_notification's %1 substitution accepts strings. -->
+
+    <cue name="OnPromoteSelectedResult" instantiate="true">
+      <conditions>
+        <event_ui_triggered screen="'VAS_BCP_PromoteSelected'"/>
+      </conditions>
+      <actions>
+        <do_if value="event.param2 == '0'">
+          <show_notification text="{202600530,13}" timeout="5s"/>
+        </do_if>
+        <do_else>
+          <show_notification text="{202600530,10}.[event.param2]" timeout="5s"/>
+        </do_else>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnPromoteAllResult" instantiate="true">
+      <conditions>
+        <event_ui_triggered screen="'VAS_BCP_PromoteAll'"/>
+      </conditions>
+      <actions>
+        <do_if value="event.param2 == '0'">
+          <show_notification text="{202600530,13}" timeout="5s"/>
+        </do_if>
+        <do_else>
+          <show_notification text="{202600530,11}.[event.param2]" timeout="5s"/>
+        </do_else>
+        <reset_cue cue="this"/>
+      </actions>
+    </cue>
+
+  </cues>
+</mdscript>

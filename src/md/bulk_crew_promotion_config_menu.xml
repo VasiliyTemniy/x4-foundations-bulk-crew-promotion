@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mdscript xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="VAS_BulkCrewPromotion_Config" xsi:noNamespaceSchemaLocation="md.xsd">
+  <!--
+    Extension Options UI for Bulk Crew Promotion. UI only: config STATE lives in
+    md.VAS_BulkCrewPromotion.ModConfig (the released script - relocating a state
+    cue would reset every player's settings), and defaults are seeded there by
+    its SeedDefaults library. This script reads and writes that cue cross-script.
+
+    The big run-options window (BuildConfigMenu) is gameplay UI tied to the
+    right-click flows and stays in the main script.
+  -->
+  <cues>
+    <cue name="StartSMO" instantiate="true">
+      <conditions>
+        <event_cue_signalled cue="md.Simple_Menu_Options.Reloaded"/>
+      </conditions>
+      <actions>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Register_Options_Menu" param="table[
+          $id = 'vas_bcp_options_menu',
+          $columns = 3,
+          $title = {202600530,20},
+          $onOpen = BuildOptionsMenu,
+        ]"/>
+        <cancel_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="BuildOptionsMenu" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <!-- Simple Menu API overwrites each dropdown option's id with its
+             1-based index, and matches $startOption against THAT index (not
+             our semantic $id). So translate the stored string value into the
+             option's position. The id list below MUST stay in the same order
+             as the $options list in the Make_Dropdown call. Fallback to 1
+             (first option) when the stored value is missing/unrecognised. -->
+        <set_value name="$startLogReasons" exact="['grouped', 'each', 'none'].indexof.{@md.VAS_BulkCrewPromotion.ModConfig.$logReasons}"/>
+        <do_if value="not $startLogReasons">
+          <set_value name="$startLogReasons" exact="1"/>
+        </do_if>
+
+        <signal_cue_instantly cue="md.Simple_Menu_API.Call_Table_Method" param="table[
+          $method = 'setColWidth',
+          $col = 1,
+          $width = 'Helper.standardButtonHeight',
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[
+          $id = 'allActionsOnlyOnHQ',
+          $checked = @md.VAS_BulkCrewPromotion.ModConfig.$allActionsOnlyOnHQ,
+          $col = 1,
+          $width = 'Helper.standardButtonHeight',
+          $height = 'Helper.standardButtonHeight',
+          $onClick = OnOptionsCheckboxChanged,
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[
+          $col = 2,
+          $text = {202600530,30},
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_CheckBox" param="table[
+          $id = 'debugEnabled',
+          $checked = @md.VAS_BulkCrewPromotion.ModConfig.$debugEnabled,
+          $col = 1,
+          $width = 'Helper.standardButtonHeight',
+          $height = 'Helper.standardButtonHeight',
+          $onClick = OnOptionsCheckboxChanged,
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[
+          $col = 2,
+          $text = {202600530,32},
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Text" param="table[
+          $col = 1,
+          $colSpan = 2,
+          $text = {202600530,33},
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Dropdown" param="table[
+          $id = 'logReasons',
+          $col = 3,
+          $options = [
+            table[$id = 'grouped', $text = {202600530,34}],
+            table[$id = 'each', $text = {202600530,35}],
+            table[$id = 'none', $text = {202600530,36}]
+          ],
+          $startOption = $startLogReasons,
+          $onDropDownConfirmed = OnOptionsDropdownChanged,
+        ]"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Add_Row"/>
+        <signal_cue_instantly cue="md.Simple_Menu_API.Make_Button" param="table[
+          $col = 1,
+          $colSpan = 3,
+          $id = 'vas_bcp_edit_default_reshuffle_options',
+          $text = table[$text = {202600530,31}, $halign = 'center'],
+          $onClick = OpenDefaultReshuffleConfig,
+          $height = 'Helper.standardButtonHeight',
+        ]"/>
+      </actions>
+    </cue>
+
+    <cue name="OnOptionsCheckboxChanged" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <set_value name="md.VAS_BulkCrewPromotion.ModConfig.{'$' + event.param.$id}" exact="event.param.$checked"/>
+        <do_if value="event.param.$id == 'debugEnabled'">
+          <do_if value="event.param.$checked">
+            <set_value name="player.entity.$vas_bcp_debug_chance" exact="100"/>
+          </do_if>
+          <do_else>
+            <set_value name="player.entity.$vas_bcp_debug_chance" exact="0"/>
+          </do_else>
+        </do_if>
+        <cancel_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <cue name="OnOptionsDropdownChanged" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <!-- The callback's $option table is our original entry, so the semantic
+             $id survives (only $startOption matching works by index). -->
+        <do_if value="@event.param.$option.$id">
+          <set_value name="md.VAS_BulkCrewPromotion.ModConfig.{'$' + event.param.$id}" exact="event.param.$option.$id"/>
+          <do_if value="event.param.$id == 'logReasons'">
+            <set_value name="player.entity.$vas_bcp_log_reasons" exact="event.param.$option.$id"/>
+          </do_if>
+        </do_if>
+        <cancel_cue cue="this"/>
+      </actions>
+    </cue>
+
+    <!-- Signal target for the button above; the main script listens for this cue
+         and opens its run-options window in 'defaults' mode. -->
+    <cue name="OpenDefaultReshuffleConfig" instantiate="true">
+      <conditions>
+        <event_cue_signalled/>
+      </conditions>
+      <actions>
+        <cancel_cue cue="this"/>
+      </actions>
+    </cue>
+  </cues>
+</mdscript>
