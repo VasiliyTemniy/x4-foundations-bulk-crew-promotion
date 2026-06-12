@@ -7,6 +7,12 @@ The vanilla map already has a useful one-ship action: replace the current pilot
 with the best available crewmember on that ship. This mod keeps that spirit, but
 adds bulk tools for large empires where doing it ship by ship becomes menu work.
 
+## Game version compatibility
+
+- 9.00 release - **supported**
+- 9.00 betas and release candidates - **supported**
+- 8.00 release - **supported**
+
 ## Requirements
 
 - **SirNukes Mod Support APIs** ([link](https://www.nexusmods.com/x4foundations/mods/503)).
