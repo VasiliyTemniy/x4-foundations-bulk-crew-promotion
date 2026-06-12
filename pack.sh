@@ -10,11 +10,7 @@ ZIP="$ROOT/packages/${MOD}_${TS}.zip"
 rm -rf "$PKG"
 mkdir -p "$PKG"
 
-cp    "$ROOT/src/content.xml" "$PKG/content.xml"
-cp    "$ROOT/src/ui.xml"      "$PKG/ui.xml"
-cp -r "$ROOT/src/md"          "$PKG/md"
-cp -r "$ROOT/src/t"           "$PKG/t"
-cp -r "$ROOT/src/ui"          "$PKG/ui"
+cp -a "$ROOT/src/." "$PKG/"
 
 (cd "$ROOT/packages" && zip -r -9 "$ZIP" "$MOD")
 
